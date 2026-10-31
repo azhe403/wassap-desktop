@@ -2,7 +2,9 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,10 +18,19 @@ import (
 var assets embed.FS
 
 func main() {
+	legacyFlag := flag.Bool("pecut1", false, "run in Pecut 1 legacy mode (single direct WhatsApp session)")
+	flag.Parse()
+
+	// Check environment variable or argument for legacy mode
+	legacyMode := *legacyFlag
+	for _, arg := range os.Args[1:] {
+		if arg == "--pecut1" || arg == "-pecut1" || arg == "--legacy" {
+			legacyMode = true
+		}
+	}
+
 	// Resolve the application directories before wails.Run. WebView2 aborts
-	// startup when its user data directory does not exist, and Wails surfaces
-	// that as a message box followed by exit, so the directory must already be
-	// on disk by the time the window is created.
+	// startup when its user data directory does not exist.
 	dirs, err := appdirs.Resolve()
 	if err != nil {
 		log.Fatal(err)
@@ -28,29 +39,37 @@ func main() {
 		log.Fatalf("cannot create application directories: %v", err)
 	}
 
-	// WhatsApp Web must own the window, so the embedded frontend is never
-	// served. Wails always navigates to http://wails.localhost/ on startup; the
-	// handler below answers every request with a 302 to WhatsApp Web, so the
-	// window ends up on WhatsApp Web without any JavaScript navigation.
-	app := NewApp(dirs)
+	app := NewApp(dirs, legacyMode)
+
+	// Configure asset server:
+	// In legacy mode, handler redirects 302 to web.whatsapp.com directly.
+	// In Pecut 2 mode, assets are served so the test interface is displayed.
+	assetOpts := &assetserver.Options{
+		Assets:  assets,
+		Handler: app.handler(),
+	}
+
+	title := "Wassap Desktop — Pecut 2 Profile Isolation Test"
+	width := 900
+	height := 650
+	if legacyMode {
+		title = "Wassap Desktop (Pecut 1 Legacy)"
+		width = 1280
+		height = 800
+	}
 
 	err = wails.Run(&options.App{
-		Title:     "Wassap Desktop",
-		Width:     1280,
-		Height:    800,
+		Title:     title,
+		Width:     width,
+		Height:    height,
 		MinWidth:  480,
-		MinHeight: 600,
-		AssetServer: &assetserver.Options{
-			Handler: whatsappWebHandler(),
-		},
+		MinHeight: 400,
+		AssetServer: assetOpts,
 		OnStartup: app.startup,
 		Bind: []interface{}{
 			app,
 		},
 		Windows: &windows.Options{
-			// The WhatsApp session (cookies, IndexedDB, localStorage) lives
-			// here. This is the only thing that makes the login survive a
-			// restart: without it WebView2 defaults to %APPDATA%\<exe name>.
 			WebviewUserDataPath: dirs.Data,
 		},
 	})

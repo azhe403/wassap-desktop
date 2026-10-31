@@ -4,10 +4,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"wassap-desktop/internal/appdirs"
 )
 
-func TestWhatsappWebHandler_RedirectsEveryRequest(t *testing.T) {
-	h := whatsappWebHandler()
+func TestAppHandler_LegacyModeRedirects(t *testing.T) {
+	dirs := appdirs.Under(t.TempDir())
+	app := NewApp(dirs, true) // legacyMode = true
+	h := app.handler()
+	if h == nil {
+		t.Fatal("expected handler in legacy mode, got nil")
+	}
 
 	for _, target := range []string{"/", "/index.html", "/some/asset.js"} {
 		rec := httptest.NewRecorder()
@@ -19,5 +26,14 @@ func TestWhatsappWebHandler_RedirectsEveryRequest(t *testing.T) {
 		if loc := rec.Header().Get("Location"); loc != whatsappURL {
 			t.Errorf("%s: Location = %q, want %q", target, loc, whatsappURL)
 		}
+	}
+}
+
+func TestAppHandler_Pecut2ServesAssets(t *testing.T) {
+	dirs := appdirs.Under(t.TempDir())
+	app := NewApp(dirs, false) // legacyMode = false
+	h := app.handler()
+	if h != nil {
+		t.Errorf("expected nil handler in Pecut 2 mode (to serve embedded assets), got %v", h)
 	}
 }
