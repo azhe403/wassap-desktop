@@ -114,7 +114,8 @@ func TestApp_AccountManagementLifecycle(t *testing.T) {
 		t.Fatalf("reloaded accounts mismatch: %+v", reloadedList)
 	}
 
-	// 6. Remove acc1: acc2 and its profile must remain 100% intact
+	// 6. Switch away from acc1 so it is no longer active, then remove it
+	_ = appRestarted.SwitchAccount(acc2.ID)
 	if err := appRestarted.RemoveAccount(acc1.ID); err != nil {
 		t.Fatalf("RemoveAccount acc1 failed: %v", err)
 	}
@@ -131,6 +132,9 @@ func TestApp_AccountManagementLifecycle(t *testing.T) {
 	if _, err := appRestarted.GetAccount(acc2.ID); err != nil {
 		t.Fatalf("acc2 should still exist: %v", err)
 	}
+
+	_ = appRestarted.CloseCurrent()
+	time.Sleep(1 * time.Second)
 }
 
 func TestApp_CorruptAccountsJSONDisablesAccountBindings(t *testing.T) {
@@ -173,5 +177,59 @@ func TestApp_CorruptAccountsJSONDisablesAccountBindings(t *testing.T) {
 		t.Fatalf("corrupt file was modified: %s", string(content))
 	}
 }
+
+func TestApp_ActiveAccountPersistenceAndSwitching(t *testing.T) {
+	tempHome := t.TempDir()
+	dirs := appdirs.Under(tempHome)
+	app := NewApp(dirs, false)
+
+	// Create 2 accounts
+	acc1, err := app.CreateAccount("Account 1")
+	if err != nil {
+		t.Fatalf("CreateAccount acc1: %v", err)
+	}
+	acc2, err := app.CreateAccount("Account 2")
+	if err != nil {
+		t.Fatalf("CreateAccount acc2: %v", err)
+	}
+
+	// Switch to acc1
+	if err := app.SwitchAccount(acc1.ID); err != nil {
+		t.Fatalf("SwitchAccount acc1: %v", err)
+	}
+	if active := app.GetActiveAccountID(); active != acc1.ID {
+		t.Errorf("GetActiveAccountID: got %q, want %q", active, acc1.ID)
+	}
+
+	// Removing active account should fail
+	if err := app.RemoveAccount(acc1.ID); err == nil {
+		t.Fatal("expected error removing active account, got nil")
+	}
+
+	// Switch to acc2
+	if err := app.SwitchAccount(acc2.ID); err != nil {
+		t.Fatalf("SwitchAccount acc2: %v", err)
+	}
+	if active := app.GetActiveAccountID(); active != acc2.ID {
+		t.Errorf("GetActiveAccountID: got %q, want %q", active, acc2.ID)
+	}
+
+	// Now acc1 can be safely removed
+	if err := app.RemoveAccount(acc1.ID); err != nil {
+		t.Fatalf("RemoveAccount acc1 failed after switching: %v", err)
+	}
+
+	// Simulate restart
+	app2 := NewApp(dirs, false)
+	if active := app2.GetActiveAccountID(); active != acc2.ID {
+		t.Errorf("expected active account restored as %q, got %q", acc2.ID, active)
+	}
+
+	// Clean up open session before test exit
+	_ = app.CloseCurrent()
+	_ = app2.CloseCurrent()
+	time.Sleep(1 * time.Second)
+}
+
 
 

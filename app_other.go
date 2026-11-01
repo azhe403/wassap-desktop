@@ -19,6 +19,16 @@ func (s *stubHost) CloseAll() error {
 	return nil
 }
 
+func (s *stubHost) UpdateBounds(width, height int) error {
+	return nil
+}
+
+func (s *stubHost) SetVisible(visible bool) error {
+	return nil
+}
+
+func (s *stubHost) SetActiveSession(id browser.ProfileID) {}
+
 type stubInspector struct{}
 
 func (s *stubInspector) Inspect(id browser.ProfileID) ([]browser.Evidence, error) {
@@ -39,3 +49,7 @@ func initPlatform(dirs appdirs.Dirs) (*browser.Manager, HostController, browser.
 	manager := browser.NewManager(deps)
 	return manager, host, insp
 }
+
+func (a *App) attachMainWindow() {}
+
+func (a *App) ensureMainWindow() {}

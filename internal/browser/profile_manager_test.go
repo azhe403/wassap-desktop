@@ -137,6 +137,7 @@ func (s *fakeSession) Profile() ProfileID            { return s.id }
 func (s *fakeSession) Path() string                  { return s.p.Path }
 func (s *fakeSession) Outcome() Outcome               { return OpenedClean }
 func (s *fakeSession) Show() error                    { return nil }
+func (s *fakeSession) Hide() error                    { return nil }
 func (s *fakeSession) Focus() error                   { return nil }
 func (s *fakeSession) Alive() bool                    { return s.clo == 0 }
 func (s *fakeSession) Close() error { s.clo++; return nil }
@@ -312,4 +313,88 @@ func TestManager_StorageSummary(t *testing.T) {
 func TestManager_LegacyWrapsInterface(t *testing.T) {
 	var _ ManagerInterface = (*Manager)(nil)
 	_ = os.MkdirAll
+}
+
+// fakeShowHideSession records Show/Hide/Close calls for the ShowSession and
+// HideSession paths.
+type fakeShowHideSession struct {
+	fakeSession
+	hideCalls []ProfileID
+	showCalls []ProfileID
+}
+
+func (s *fakeShowHideSession) Hide() error  { s.hideCalls = append(s.hideCalls, s.id); return nil }
+func (s *fakeShowHideSession) Show() error  { s.showCalls = append(s.showCalls, s.id); return nil }
+
+type showHideOpener struct {
+	sessions map[ProfileID]*fakeShowHideSession
+}
+
+func (o *showHideOpener) OpenProfile(id ProfileID, _ Probe) (Session, error) {
+	s := &fakeShowHideSession{fakeSession: fakeSession{id: id}}
+	o.sessions[id] = s
+	return s, nil
+}
+
+func TestManager_ShowSessionHidesOthers(t *testing.T) {
+	layout := NewLayout(t.TempDir())
+	op := &showHideOpener{sessions: make(map[ProfileID]*fakeShowHideSession)}
+	held, locker := newFakeLock()
+	m := NewManager(ManagerDeps{
+		Layout:  layout,
+		Applier: newFakeApplier(),
+		Opener:  op,
+		Lock:    locker,
+		Now:     func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) },
+	})
+	_ = held
+
+	for _, id := range []string{"account-1", "account-2", "account-3"} {
+		if err := m.Create(id); err != nil {
+			t.Fatalf("Create %s: %v", id, err)
+		}
+		if err := m.Open(id); err != nil {
+			t.Fatalf("Open %s: %v", id, err)
+		}
+	}
+
+	if err := m.ShowSession("account-2"); err != nil {
+		t.Fatalf("ShowSession: %v", err)
+	}
+
+	if got, want := op.sessions["account-2"].showCalls, []ProfileID{"account-2"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("account-2 show = %v, want %v", got, want)
+	}
+	if got, want := op.sessions["account-1"].hideCalls, []ProfileID{"account-1"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("account-1 hide = %v, want %v", got, want)
+	}
+	if got, want := op.sessions["account-3"].hideCalls, []ProfileID{"account-3"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("account-3 hide = %v, want %v", got, want)
+	}
+
+	if err := m.HideSession("account-2"); err != nil {
+		t.Fatalf("HideSession: %v", err)
+	}
+	if got, want := op.sessions["account-2"].hideCalls, []ProfileID{"account-2"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("account-2 hide = %v, want %v", got, want)
+	}
+}
+
+func TestManager_ShowSessionClosedErrors(t *testing.T) {
+	m, _, _, _ := newTestManager(t)
+	if err := m.Create("account-1"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := m.Open("account-1"); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := m.Close("account-1"); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := m.ShowSession("account-1"); !errors.Is(err, ErrSessionEnded) {
+		t.Errorf("ShowSession on closed = %v, want ErrSessionEnded", err)
+	}
+	if err := m.HideSession("account-1"); !errors.Is(err, ErrSessionEnded) {
+		t.Errorf("HideSession on closed = %v, want ErrSessionEnded", err)
+	}
 }

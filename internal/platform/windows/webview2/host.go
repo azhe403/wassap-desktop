@@ -39,6 +39,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
 	"github.com/wailsapp/go-webview2/webviewloader"
@@ -81,8 +82,137 @@ type Host struct {
 	// profile before the controller is closed anyway.
 	CloseGrace time.Duration
 
+	// ParentHWND is the main desktop window handle. When non-zero,
+	// sessions are created as embedded WS_CHILD windows inside it.
+	ParentHWND uintptr
+	// SidebarWidth is the pixel width of the sidebar on the left.
+	SidebarWidth int
+
+	// activeID is the profile whose session window is currently visible;
+	// every other open session stays alive but hidden behind it.
+	activeID browser.ProfileID
+
 	mu       sync.Mutex
 	sessions map[*Session]struct{}
+}
+
+// SetParentWindow configures the parent window and sidebar offset, and hooks
+// the parent's native Win32 WM_SIZE messages for instant real-time resizing.
+func (h *Host) SetParentWindow(hwnd uintptr, sidebarWidth int) {
+	h.mu.Lock()
+	h.ParentHWND = hwnd
+	h.SidebarWidth = sidebarWidth
+	h.mu.Unlock()
+
+	SubclassParentWindow(hwnd, h)
+}
+
+// ResizeChildren immediately resizes every child window to match the parent
+// window's client dimensions. Because this runs directly in the parent's native
+// Win32 WM_SIZE proc, it updates synchronously on every single frame as the user
+// drags the window border.
+func (h *Host) ResizeChildren(parentWidth, parentHeight int) {
+	h.mu.Lock()
+	sidebarWidth := h.SidebarWidth
+	h.mu.Unlock()
+
+	w := parentWidth - sidebarWidth
+	curH := parentHeight
+	if w < 0 {
+		w = 0
+	}
+	if curH < 0 {
+		curH = 0
+	}
+
+	for s := range h.sessionsSnapshot() {
+		if s.hwnd != 0 {
+			moveWindow(s.hwnd, sidebarWidth, 0, w, curH)
+		}
+	}
+}
+
+// UpdateBounds resizes and repositions any open session inside/over the parent window.
+func (h *Host) UpdateBounds(width, height int) error {
+	h.mu.Lock()
+	pHwnd := h.ParentHWND
+	h.mu.Unlock()
+
+	if pHwnd != 0 {
+		var clientRect struct {
+			Left, Top, Right, Bottom int32
+		}
+		procGetClientRect.Call(pHwnd, uintptr(unsafe.Pointer(&clientRect)))
+		h.ResizeChildren(int(clientRect.Right), int(clientRect.Bottom))
+	} else {
+		h.ResizeChildren(width, height)
+	}
+	return nil
+}
+
+// SetVisible shows or hides open sessions (used during modal dialogs).
+func (h *Host) SetVisible(visible bool) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for s := range h.sessions {
+		_ = s.call(func() error {
+			if s.hwnd != 0 {
+				if visible {
+					_ = showWindow(s.hwnd)
+				} else {
+					hideWindow(s.hwnd)
+				}
+			}
+			return nil
+		})
+	}
+	return nil
+}
+
+// SetActiveSession makes the session for id visible and hides every other open
+// session, so the app can switch accounts by swapping visibility instead of
+// tearing engines down.
+func (h *Host) SetActiveSession(id browser.ProfileID) {
+	h.mu.Lock()
+	h.activeID = id
+	sessions := make([]*Session, 0, len(h.sessions))
+	for s := range h.sessions {
+		sessions = append(sessions, s)
+	}
+	h.mu.Unlock()
+
+	var active *Session
+	for _, s := range sessions {
+		if s.profile == id {
+			active = s
+		}
+	}
+	for _, s := range sessions {
+		if s == active {
+			_ = s.Show()
+		} else {
+			_ = s.Hide()
+		}
+	}
+}
+
+// ActiveSessionID returns the profile id currently shown; empty when none.
+func (h *Host) ActiveSessionID() browser.ProfileID {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.activeID
+}
+
+// sessionsSnapshot returns a copy of the open sessions so the caller can
+// mutate visibility without holding the host lock.
+func (h *Host) sessionsSnapshot() map[*Session]struct{} {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make(map[*Session]struct{}, len(h.sessions))
+	for s := range h.sessions {
+		out[s] = struct{}{}
+	}
+	return out
 }
 
 // NewHost returns a Host with defaults for the proof of concept.
@@ -125,7 +255,12 @@ func (h *Host) OpenProfile(id browser.ProfileID, probe browser.Probe) (browser.S
 
 	h.mu.Lock()
 	h.sessions[s] = struct{}{}
+	// Remember which session is visible; the run loop opens this window
+	// hidden when another one is already active, so switching accounts only
+	// swaps visibility instead of destroying engines.
+	startHidden := h.ParentHWND != 0 && h.activeID != "" && h.activeID != id
 	h.mu.Unlock()
+	s.startHidden = startHidden
 
 	go s.run()
 
@@ -216,6 +351,9 @@ type Session struct {
 	profile  browser.ProfileID
 	path     string
 	outcome  browser.Outcome
+	// startHidden is set by OpenProfile: the session's window is created
+	// hidden because another session is currently active.
+	startHidden bool
 	requests chan openRequest
 	events   chan SessionEvent
 	done     chan struct{}
@@ -288,17 +426,36 @@ func (s *Session) emit(kind SessionEventKind, err error) {
 	}
 }
 
-// Show brings the window to the front.
+// Show brings the window to the front and focuses it. Synchronous: the switch
+// back must complete before the UI drops its "switching" state.
 func (s *Session) Show() error {
 	if !s.Alive() {
 		return browser.ErrSessionEnded
 	}
-	go func() {
-		if err := s.call(func() error { return showWindow(s.hwnd) }); err != nil {
-			log.Printf("webview2: cannot show window for %s: %v", s.profile, err)
+	return s.call(func() error {
+		if err := showWindow(s.hwnd); err != nil {
+			return err
 		}
-	}()
-	return nil
+		if err := setForeground(s.hwnd); err != nil {
+			log.Printf("webview2: cannot focus window for %s: %v", s.profile, err)
+		}
+		if s.chromium != nil {
+			s.chromium.Focus()
+		}
+		return nil
+	})
+}
+
+// Hide keeps the engine running but makes the session window invisible, so
+// another session can take the embedded region without this one losing state.
+func (s *Session) Hide() error {
+	if !s.Alive() {
+		return browser.ErrSessionEnded
+	}
+	return s.call(func() error {
+		hideWindow(s.hwnd)
+		return nil
+	})
 }
 
 // Focus brings the window to the foreground and moves keyboard focus into the
@@ -322,6 +479,7 @@ func (s *Session) Focus() error {
 // WebView2 controller and environment, or until the close timeout elapses.
 func (s *Session) Close() error {
 	s.closeOnce.Do(func() {
+		log.Printf("webview2: closing session %s hwnd=%d", s.profile, s.hwnd)
 		s.closed = make(chan struct{})
 		go func() {
 			defer close(s.closed)
@@ -374,6 +532,7 @@ func (s *Session) run() {
 	s.hwnd = hwnd
 
 	if err := s.setUpWebView(); err != nil {
+		log.Printf("webview2: setUpWebView failed for %s: %v", s.profile, err)
 		s.requests <- openRequest{err: err}
 		s.emit(EventStartFailed, err)
 		destroyWindow(hwnd)
@@ -382,7 +541,12 @@ func (s *Session) run() {
 	}
 
 	_ = setWindowTitle(hwnd, fmt.Sprintf("%s - %s", s.host.Title, s.profile))
-	_ = showWindow(hwnd)
+	if s.startHidden {
+		hideWindow(hwnd)
+		log.Printf("webview2: opening %s hidden (another session is active)", s.profile)
+	} else {
+		_ = showWindow(hwnd)
+	}
 	if s.chromium != nil {
 		_ = s.chromium.Show()
 		s.chromium.Resize()
@@ -392,6 +556,41 @@ func (s *Session) run() {
 	s.setAlive(true)
 	s.requests <- openRequest{}
 	s.emit(EventReady, nil)
+
+	// If this session has a parent Wails window, attach it now as a real Win32 child (WS_CHILD).
+	// Because SetParent is called AFTER WebView2's controller has already initialised its COM
+	// and HWND surface, WebView2 works completely, and Windows automatically moves & clips it
+	// synchronously with the parent window whenever the user drags or resizes the main window!
+	if s.host.ParentHWND != 0 {
+		// Change style from WS_POPUP to WS_CHILD (GWL_STYLE = -16 = 0xFFFFFFF0)
+		var gwlStyle uintptr = 0xFFFFFFF0
+		currentStyle, _, _ := procGetWindowLongPtr.Call(hwnd, gwlStyle)
+		newStyle := (currentStyle &^ wsPopup) | wsChild
+		procSetWindowLongPtr.Call(hwnd, gwlStyle, newStyle)
+
+		// Set Wails window as native parent
+		procSetParent.Call(hwnd, s.host.ParentHWND)
+
+		// Reposition child in client coordinates of parent (x = 68, y = 0)
+		var clientRect struct {
+			Left, Top, Right, Bottom int32
+		}
+		procGetClientRect.Call(s.host.ParentHWND, uintptr(unsafe.Pointer(&clientRect)))
+		w := int(clientRect.Right) - s.host.SidebarWidth
+		h := int(clientRect.Bottom)
+		if w < 0 {
+			w = 0
+		}
+		if h < 0 {
+			h = 0
+		}
+		moveWindow(hwnd, s.host.SidebarWidth, 0, w, h)
+		if s.chromium != nil {
+			s.chromium.Resize()
+		}
+		log.Printf("webview2: successfully re-parented %s (hwnd=%d) as WS_CHILD of %d at pos=(%d,0) size=%dx%d",
+			s.profile, hwnd, s.host.ParentHWND, s.host.SidebarWidth, w, h)
+	}
 
 	s.messageLoop()
 }

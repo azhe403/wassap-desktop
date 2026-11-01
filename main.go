@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,6 +18,15 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// shellUserDataPath returns a unique user data folder for the Wails shell.
+// WebView2 refuses to create a second controller for a user data folder that is
+// already in use, so a leftover engine process from a previous run would break
+// start-up. The folder name carries the process id, which keeps concurrent
+// runs apart and leaves no stale lock behind.
+func shellUserDataPath(dirs appdirs.Dirs) string {
+	return filepath.Join(dirs.Data, "wails-shell", fmt.Sprintf("run-%d", os.Getpid()))
+}
 
 func main() {
 	legacyFlag := flag.Bool("pecut1", false, "run in Pecut 1 legacy mode (single direct WhatsApp session)")
@@ -49,9 +60,9 @@ func main() {
 		Handler: app.handler(),
 	}
 
-	title := "Wassap Desktop — Pecut 2 Profile Isolation Test"
-	width := 900
-	height := 650
+	title := "Wassap Desktop"
+	width := 1020
+	height := 720
 	if legacyMode {
 		title = "Wassap Desktop (Pecut 1 Legacy)"
 		width = 1280
@@ -59,18 +70,20 @@ func main() {
 	}
 
 	err = wails.Run(&options.App{
-		Title:     title,
-		Width:     width,
-		Height:    height,
-		MinWidth:  480,
-		MinHeight: 400,
-		AssetServer: assetOpts,
-		OnStartup: app.startup,
+		Title:            title,
+		Width:            width,
+		Height:           height,
+		MinWidth:         480,
+		MinHeight:        400,
+		BackgroundColour: &options.RGBA{R: 11, G: 20, B: 26, A: 255},
+		AssetServer:      assetOpts,
+		OnStartup:        app.startup,
+		OnDomReady:       app.domReady,
 		Bind: []interface{}{
 			app,
 		},
 		Windows: &windows.Options{
-			WebviewUserDataPath: dirs.Data,
+			WebviewUserDataPath: shellUserDataPath(dirs),
 		},
 	})
 

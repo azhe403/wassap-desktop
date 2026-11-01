@@ -89,6 +89,10 @@ type Session interface {
 	Outcome() Outcome
 	// Show brings the session's window to the front.
 	Show() error
+	// Hide keeps the engine running but makes the session's window invisible,
+	// so another session can take over the embedded region without this
+	// account losing its state.
+	Hide() error
 	// Focus gives the session's window keyboard focus.
 	Focus() error
 	// Close tears the session down. It blocks until the browser has finished

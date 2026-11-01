@@ -68,6 +68,7 @@ type mockProfileManager struct {
 	created    map[string]bool
 	deleted    map[string]bool
 	active     map[string]bool
+	hidden     map[string]bool
 	createErr  error
 	deleteErr  error
 }
@@ -77,6 +78,7 @@ func newMockProfileManager() *mockProfileManager {
 		created: make(map[string]bool),
 		deleted: make(map[string]bool),
 		active:  make(map[string]bool),
+		hidden:  make(map[string]bool),
 	}
 }
 
@@ -93,8 +95,30 @@ func (m *mockProfileManager) Open(id string) error {
 	return nil
 }
 
+func (m *mockProfileManager) ShowSession(id string) error {
+	if !m.active[id] {
+		return browser.ErrSessionEnded
+	}
+	m.hidden[id] = false
+	for other := range m.active {
+		if other != id {
+			m.hidden[other] = true
+		}
+	}
+	return nil
+}
+
+func (m *mockProfileManager) HideSession(id string) error {
+	if !m.active[id] {
+		return browser.ErrSessionEnded
+	}
+	m.hidden[id] = true
+	return nil
+}
+
 func (m *mockProfileManager) Close(id string) error {
 	delete(m.active, id)
+	delete(m.hidden, id)
 	return nil
 }
 
@@ -107,6 +131,7 @@ func (m *mockProfileManager) Delete(id string) error {
 	}
 	m.deleted[id] = true
 	delete(m.created, id)
+	delete(m.hidden, id)
 	return nil
 }
 

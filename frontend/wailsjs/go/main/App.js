@@ -10,6 +10,10 @@ export function CloseCurrent() {
   return window['go']['main']['App']['CloseCurrent']();
 }
 
+export function CreateAccount(arg1) {
+  return window['go']['main']['App']['CreateAccount'](arg1);
+}
+
 export function CurrentProfile() {
   return window['go']['main']['App']['CurrentProfile']();
 }
@@ -18,12 +22,28 @@ export function DeleteProfile(arg1) {
   return window['go']['main']['App']['DeleteProfile'](arg1);
 }
 
+export function GetAccount(arg1) {
+  return window['go']['main']['App']['GetAccount'](arg1);
+}
+
+export function GetActiveAccountID() {
+  return window['go']['main']['App']['GetActiveAccountID']();
+}
+
 export function InspectProfile(arg1) {
   return window['go']['main']['App']['InspectProfile'](arg1);
 }
 
+export function ListAccounts() {
+  return window['go']['main']['App']['ListAccounts']();
+}
+
 export function ListProfiles() {
   return window['go']['main']['App']['ListProfiles']();
+}
+
+export function NotifyWindowResize(arg1, arg2) {
+  return window['go']['main']['App']['NotifyWindowResize'](arg1, arg2);
 }
 
 export function OpenAccount(arg1) {
@@ -40,4 +60,20 @@ export function OpenAccountB() {
 
 export function OpenLegacyPecut1() {
   return window['go']['main']['App']['OpenLegacyPecut1']();
+}
+
+export function RemoveAccount(arg1) {
+  return window['go']['main']['App']['RemoveAccount'](arg1);
+}
+
+export function RenameAccount(arg1, arg2) {
+  return window['go']['main']['App']['RenameAccount'](arg1, arg2);
+}
+
+export function SetWebViewVisible(arg1) {
+  return window['go']['main']['App']['SetWebViewVisible'](arg1);
+}
+
+export function SwitchAccount(arg1) {
+  return window['go']['main']['App']['SwitchAccount'](arg1);
 }

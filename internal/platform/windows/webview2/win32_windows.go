@@ -5,6 +5,7 @@ package webview2
 import (
 	"errors"
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 	"syscall"
@@ -22,7 +23,9 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	ole32    = syscall.NewLazyDLL("ole32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 
+	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
 	procCoInitializeEx   = ole32.NewProc("CoInitializeEx")
 	procCoUninitialize   = ole32.NewProc("CoUninitialize")
 	procRegisterClassExW = user32.NewProc("RegisterClassExW")
@@ -42,6 +45,26 @@ var (
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 	procGetCurrentThread = kernel32.NewProc("GetCurrentThreadId")
 	procCallWindowProcW  = user32.NewProc("CallWindowProcW")
+	procGetClientRect    = user32.NewProc("GetClientRect")
+	procMoveWindow       = user32.NewProc("MoveWindow")
+	procEnumChildWindows = user32.NewProc("EnumChildWindows")
+	procIsWindowVisible_ = user32.NewProc("IsWindowVisible")
+	procSetWindowLongPtr = user32.NewProc("SetWindowLongW")
+	procGetWindowLongPtr = user32.NewProc("GetWindowLongW")
+	procGetWindowRect    = user32.NewProc("GetWindowRect")
+	procSetParent        = user32.NewProc("SetParent")
+	procSetWindowPos     = user32.NewProc("SetWindowPos")
+
+	comctl32                 = syscall.NewLazyDLL("comctl32.dll")
+	procSetWindowSubclass    = comctl32.NewProc("SetWindowSubclass")
+	procDefSubclassProc      = comctl32.NewProc("DefSubclassProc")
+	procRemoveWindowSubclass = comctl32.NewProc("RemoveWindowSubclass")
+)
+
+const (
+	swpNoZOrder   = 0x0004
+	swpNoActivate = 0x0010
+	swpNoCopyBits = 0x0100
 )
 
 const (
@@ -55,9 +78,13 @@ const (
 	wmNCDestroy      = 0x0082
 
 	wsOverlappedWindow = 0x00CF0000
+	wsPopup            = 0x80000000
+	wsChild            = 0x40000000
+	wsVisible          = 0x10000000
 	wsClipSiblings     = 0x04000000
 	wsClipChildren     = 0x02000000
 	swShow             = 5
+	swHide             = 0
 	colorWindow        = 5
 	idcArrow           = 32512
 	csOwndc            = 0x0020
@@ -138,6 +165,8 @@ func (s *Session) createWindow() (uintptr, error) {
 
 	instance, _, _ := procGetModuleHandleW.Call(0)
 	cursor, _, _ := procLoadCursorW.Call(0, idcArrow)
+	// Dark WhatsApp background #111b21: COLORREF is 0x00BBGGRR -> 0x00211B11
+	darkBrush, _, _ := procCreateSolidBrush.Call(0x00211B11)
 
 	wc := wndClassEx{
 		size:       uint32(unsafe.Sizeof(wndClassEx{})),
@@ -145,7 +174,7 @@ func (s *Session) createWindow() (uintptr, error) {
 		wndProc:    syscall.NewCallback(windowProc),
 		instance:   instance,
 		cursor:     cursor,
-		background: colorWindow + 1,
+		background: darkBrush,
 		className:  className,
 	}
 	if atom, _, regErr := procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); atom == 0 {
@@ -154,15 +183,63 @@ func (s *Session) createWindow() (uintptr, error) {
 	s.className = className
 	s.instance = instance
 
+	var style uintptr = wsOverlappedWindow | wsClipSiblings | wsClipChildren
+	var parentHwnd uintptr = 0
+	x := s.host.Bounds.X
+	y := s.host.Bounds.Y
+	w := s.host.Bounds.Width
+	h := s.host.Bounds.Height
+
+	if s.host.ParentHWND != 0 {
+		// Use WS_POPUP owned by ParentHWND so the window has its own clean Win32
+		// message pump and COM apartment without cross-thread WS_CHILD rendering bugs.
+		// It has no borders, no titlebar, no taskbar button, and docks precisely over
+		// the main window's content region.
+		style = wsPopup | wsVisible | wsClipSiblings | wsClipChildren
+		parentHwnd = s.host.ParentHWND
+
+		var parentScreenRect struct {
+			Left, Top, Right, Bottom int32
+		}
+		procGetWindowRect.Call(parentHwnd, uintptr(unsafe.Pointer(&parentScreenRect)))
+
+		var clientRect struct {
+			Left, Top, Right, Bottom int32
+		}
+		procGetClientRect.Call(parentHwnd, uintptr(unsafe.Pointer(&clientRect)))
+
+		// Calculate client origin in screen coordinates (accounting for titlebar and borders)
+		borderX := int(parentScreenRect.Right-parentScreenRect.Left-clientRect.Right) / 2
+		titleY := int(parentScreenRect.Bottom-parentScreenRect.Top-clientRect.Bottom) - borderX
+
+		x = int(parentScreenRect.Left) + borderX + s.host.SidebarWidth
+		y = int(parentScreenRect.Top) + titleY
+		w = int(clientRect.Right) - s.host.SidebarWidth
+		h = int(clientRect.Bottom)
+		if w <= 0 {
+			// The parent window has not been laid out yet; start with a sane size.
+			w = 1000
+		}
+		if h <= 0 {
+			h = 700
+		}
+		log.Printf("webview2: popup window for %s -> owner=%d screenPos=(%d,%d) size=%dx%d",
+			s.profile, parentHwnd, x, y, w, h)
+	}
+
 	hwnd, _, createErr := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(title)),
-		wsOverlappedWindow|wsClipSiblings|wsClipChildren,
-		uintptr(s.host.Bounds.X), uintptr(s.host.Bounds.Y),
-		uintptr(s.host.Bounds.Width), uintptr(s.host.Bounds.Height),
-		0, 0, instance, 0,
+		style,
+		uintptr(x), uintptr(y),
+		uintptr(w), uintptr(h),
+		parentHwnd, 0, instance, 0,
 	)
+	if hwnd != 0 {
+		vis, _, _ := procIsWindowVisible_.Call(hwnd)
+		log.Printf("webview2: created hwnd=%d for %s visible=%v style=0x%x", hwnd, s.profile, vis != 0, style)
+	}
 	if hwnd == 0 {
 		procUnregisterClassW.Call(uintptr(unsafe.Pointer(className)), instance)
 		s.className = nil
@@ -249,6 +326,10 @@ func (s *Session) setUpWebView() error {
 	}
 
 	s.chromium = c
+	// Set default background to WhatsApp dark #111b21 (alpha=255, R=17, G=27, B=33)
+	// so the WebView2 compositor buffer never flashes white during resize or navigation.
+	_ = SetControllerBackgroundColor(c.GetController(), 0xFF, 17, 27, 33)
+
 	_ = c.Show()
 	c.Resize()
 	if s.host.StartURL != "" {
@@ -269,6 +350,8 @@ func processFailureError(id browser.ProfileID, kind edge.COREWEBVIEW2_PROCESS_FA
 
 func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	switch message {
+	case 0x0014: // WM_ERASEBKGND: suppress default erase to eliminate white flicker on resize
+		return 1
 	case wmInvokeCallback:
 		if s, ok := sessions.Load(hwnd); ok {
 			s.(*Session).serveCallback()
@@ -335,6 +418,20 @@ func showWindow(hwnd uintptr) error {
 	return nil
 }
 
+func hideWindow(hwnd uintptr) {
+	if hwnd == 0 {
+		return
+	}
+	procShowWindow.Call(hwnd, swHide)
+}
+
+func moveWindow(hwnd uintptr, x, y, width, height int) {
+	if hwnd == 0 {
+		return
+	}
+	procMoveWindow.Call(hwnd, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 1)
+}
+
 func setWindowTitle(hwnd uintptr, title string) error {
 	p, err := syscall.UTF16PtrFromString(title)
 	if err != nil {
@@ -376,4 +473,61 @@ func translateMessage(m *msg) {
 
 func dispatchMessage(m *msg) {
 	procDispatchMessageW.Call(uintptr(unsafe.Pointer(m)))
+}
+
+// parentHosts maps a parent window HWND to its Host.
+var (
+	parentHosts  sync.Map // uintptr -> *Host
+	subclassOnce sync.Once
+	subclassProc uintptr
+)
+
+func parentWindowSubclassProc(hwnd uintptr, uMsg uint32, wParam, lParam, uIdSubclass, dwRefData uintptr) uintptr {
+	if uMsg == wmSize {
+		if wParam != 1 { // not SIZE_MINIMIZED
+			width := int(lParam & 0xFFFF)
+			height := int((lParam >> 16) & 0xFFFF)
+			if val, ok := parentHosts.Load(hwnd); ok {
+				if h, ok := val.(*Host); ok {
+					h.ResizeChildren(width, height)
+				}
+			}
+		}
+	} else if uMsg == wmNCDestroy {
+		const subclassID = 0x57415353
+		procRemoveWindowSubclass.Call(hwnd, subclassProc, subclassID)
+		parentHosts.Delete(hwnd)
+	}
+	ret, _, _ := procDefSubclassProc.Call(hwnd, uintptr(uMsg), wParam, lParam)
+	return ret
+}
+
+func setWindowPosFast(hwnd uintptr, x, y, width, height int) {
+	if hwnd == 0 {
+		return
+	}
+	procSetWindowPos.Call(
+		hwnd,
+		0,
+		uintptr(x),
+		uintptr(y),
+		uintptr(width),
+		uintptr(height),
+		swpNoZOrder|swpNoActivate|swpNoCopyBits,
+	)
+}
+
+// SubclassParentWindow hooks the parent window's native Win32 WM_SIZE messages
+// so embedded child sessions resize synchronously at 60fps as the user drags
+// the window borders.
+func SubclassParentWindow(hwnd uintptr, h *Host) {
+	if hwnd == 0 {
+		return
+	}
+	parentHosts.Store(hwnd, h)
+	subclassOnce.Do(func() {
+		subclassProc = syscall.NewCallback(parentWindowSubclassProc)
+	})
+	const subclassID = 0x57415353 // "WASS"
+	procSetWindowSubclass.Call(hwnd, subclassProc, subclassID, 0)
 }

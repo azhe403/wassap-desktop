@@ -39,6 +39,13 @@ var (
 type ManagerInterface interface {
 	Create(accountID string) error
 	Open(accountID string) error
+	// ShowSession makes an already-open session's window visible and focused,
+	// hiding every other open session's window. Used to switch accounts
+	// without destroying the background sessions.
+	ShowSession(accountID string) error
+	// HideSession keeps an open session's engine running but hides its window,
+	// so switching away from an account does not flush or lose its state.
+	HideSession(accountID string) error
 	Close(accountID string) error
 	Delete(accountID string) error
 }
@@ -131,6 +138,18 @@ func NewManager(deps ManagerDeps, opts ...Option) *Manager {
 
 // Layout exposes the directories in use.
 func (m *Manager) Layout() Layout { return m.layout }
+
+// IsOpen reports whether a live session currently holds the profile.
+func (m *Manager) IsOpen(accountID string) bool {
+	id, err := ParseProfileID(accountID)
+	if err != nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e := m.entries[id]
+	return e != nil && e.session != nil && e.state == StateOpen && e.session.Alive()
+}
 
 // Create makes a new, empty profile. It never opens a browser and never
 // overwrites an existing profile.
@@ -240,6 +259,83 @@ func (m *Manager) Open(accountID string) error {
 	return nil
 }
 
+// ShowSession makes an open session's window visible and focused, hiding every
+// other open session's window. It is how the app switches accounts without
+// destroying the background sessions: each engine keeps running and flushing,
+// only the visible window changes.
+func (m *Manager) ShowSession(accountID string) error {
+	id, err := ParseProfileID(accountID)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	e := m.entries[id]
+	if e == nil || e.session == nil || e.state != StateOpen {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s is not open", ErrSessionEnded, id)
+	}
+	session := e.session
+	hidden := make([]Session, 0, len(m.entries))
+	for _, other := range m.entries {
+		if other.id != id && other.session != nil && other.state == StateOpen {
+			hidden = append(hidden, other.session)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, s := range hidden {
+		_ = s.Hide()
+	}
+	if err := session.Show(); err != nil {
+		return fmt.Errorf("browser: cannot show session %s: %w", id, err)
+	}
+	_ = session.Focus()
+	return nil
+}
+
+// HideSession hides an open session's window without tearing the engine down,
+// so the account's state survives in the background and the switch back is
+// instant.
+func (m *Manager) HideSession(accountID string) error {
+	id, err := ParseProfileID(accountID)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	e := m.entries[id]
+	if e == nil || e.session == nil || e.state != StateOpen {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s is not open", ErrSessionEnded, id)
+	}
+	session := e.session
+	m.mu.Unlock()
+
+	return session.Hide()
+}
+
+// CloseAll closes every session, so the app can exit cleanly and flush each
+// profile to disk.
+func (m *Manager) CloseAll() error {
+	m.mu.Lock()
+	open := make([]*entry, 0, len(m.entries))
+	for _, e := range m.entries {
+		if e.session != nil && e.state == StateOpen {
+			open = append(open, e)
+		}
+	}
+	m.mu.Unlock()
+
+	var firstErr error
+	for _, e := range open {
+		if err := m.Close(string(e.id)); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // Close tears down the session.
 func (m *Manager) Close(accountID string) error {
 	id, err := ParseProfileID(accountID)
@@ -325,7 +421,20 @@ func (m *Manager) Delete(accountID string) error {
 		return fmt.Errorf("browser: cannot prepare trash: %w", err)
 	}
 	if err := os.Rename(dir, trash); err != nil {
-		return fmt.Errorf("browser: cannot move profile %s to trash: %w", id, err)
+		// A recently closed WebView2 engine can still hold the profile's
+		// file handles for a short while. Retry the move until the OS
+		// releases them instead of failing the deletion outright.
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			lastErr := os.Rename(dir, trash)
+			if lastErr == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("browser: cannot move profile %s to trash: %w", id, lastErr)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 	for _, extra := range []string{m.layout.StagingDir(id)} {
 		_ = os.RemoveAll(extra)

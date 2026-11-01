@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -46,6 +47,8 @@ func NewJSONAccountRepository(filePath string) (*JSONAccountRepository, error) {
 	if len(data) == 0 {
 		return repo, nil
 	}
+
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 
 	var loaded []account.Account
 	if err := json.Unmarshal(data, &loaded); err != nil {
