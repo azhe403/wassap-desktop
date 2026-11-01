@@ -9,6 +9,7 @@ frontend/dist/
 *.log
 .tmp/
 *.tmp
+.superpowers/
 
 # OS generated files
 Thumbs.db
