@@ -42,6 +42,19 @@ app.innerHTML = `
         </div>
     </div>
 
+    <div class="accounts-card">
+        <h2>Account Management</h2>
+        <p class="hint">Create, rename, delete accounts. Each account gets its own persistent browser profile.</p>
+        <div class="account-form">
+            <input id="account-name" class="account-input" placeholder="New account name" maxlength="100">
+            <button id="btn-create-account" class="btn btn-sm btn-primary">+ Create</button>
+        </div>
+        <div id="accounts-list" class="accounts-list">
+            <div class="loading">Loading accounts...</div>
+        </div>
+        <p id="accounts-msg" class="hint"></p>
+    </div>
+
     <div class="evidence-card">
         <h2>Evidence Inspector</h2>
         <p class="hint">Select an account to view real on-disk storage data (cookies, LocalStorage leveldb, paths).</p>
@@ -89,6 +102,7 @@ async function updateStatus() {
 
         const profiles = await api.ListProfiles();
         renderProfiles(profiles);
+        await refreshAccounts();
     } catch (err) {
         console.error('Failed to update status:', err);
     }
@@ -165,6 +179,74 @@ async function inspectProfile(id) {
     }
 }
 
+// --- Account management (Pecut 3) ---
+async function refreshAccounts() {
+    const api = getApp();
+    const list = document.getElementById('accounts-list');
+    const msg = document.getElementById('accounts-msg');
+    if (!api) {
+        list.innerHTML = '<div class="loading">Backend loading...</div>';
+        return;
+    }
+    msg.innerText = '';
+    let accounts;
+    try {
+        accounts = await api.ListAccounts();
+    } catch (err) {
+        msg.innerText = 'List failed: ' + err;
+        return;
+    }
+    if (!accounts || accounts.length === 0) {
+        list.innerHTML = '<p class="empty">No accounts yet.</p>';
+        return;
+    }
+    list.innerHTML = accounts.map(a => `
+        <div class="account-row">
+            <div class="account-info">
+                <strong>${escapeHTML(a.Name)}</strong>
+                <code>${a.ID}</code>
+            </div>
+            <div class="profile-card-actions">
+                <button class="btn btn-xs btn-ghost" onclick="renameAccount('${a.ID}')">Rename</button>
+                <button class="btn btn-xs btn-danger" onclick="deleteAccount('${a.ID}')">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.renameAccount = async (id) => {
+    const api = getApp();
+    if (!api) return;
+    let name;
+    try {
+        name = await api.GetAccount(id);
+        name = prompt('New account name:', name ? name.Name : '');
+    } catch (err) {
+        alert('Failed to load account: ' + err);
+        return;
+    }
+    if (!name) return;
+    try {
+        await api.RenameAccount(id, name);
+        await refreshAccounts();
+    } catch (err) {
+        alert('Rename failed: ' + err);
+    }
+};
+
+window.deleteAccount = async (id) => {
+    const api = getApp();
+    if (!api) return;
+    if (!confirm('Delete account ' + id + ' and its browser profile?')) return;
+    try {
+        await api.RemoveAccount(id);
+        await refreshAccounts();
+        await updateStatus();
+    } catch (err) {
+        alert('Delete failed: ' + err);
+    }
+};
+
 // Global actions for inline buttons
 window.openProfile = async (id) => {
     const api = getApp();
@@ -234,6 +316,22 @@ document.getElementById('btn-close-current').addEventListener('click', async () 
     }
 });
 document.getElementById('btn-refresh').addEventListener('click', updateStatus);
+document.getElementById('btn-create-account').addEventListener('click', async () => {
+    const api = getApp();
+    if (!api) return;
+    const input = document.getElementById('account-name');
+    const name = input.value.trim();
+    if (!name) return;
+    input.value = '';
+    try {
+        const acc = await api.CreateAccount(name);
+        await refreshAccounts();
+        await updateStatus();
+        setStatus('Created ' + acc.Name);
+    } catch (err) {
+        alert('Create failed: ' + err);
+    }
+});
 document.getElementById('btn-inspect-a').addEventListener('click', () => inspectProfile('account-a'));
 document.getElementById('btn-inspect-b').addEventListener('click', () => inspectProfile('account-b'));
 document.getElementById('btn-legacy').addEventListener('click', async () => {
@@ -250,4 +348,4 @@ document.getElementById('btn-legacy').addEventListener('click', async () => {
 // Periodic polling
 setInterval(updateStatus, 3000);
 window.addEventListener('DOMContentLoaded', updateStatus);
-setTimeout(updateStatus, 500);
+setTimeout(() => { updateStatus(); refreshAccounts(); }, 500);

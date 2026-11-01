@@ -94,7 +94,7 @@ body {
     color: var(--text-muted);
 }
 
-.actions-card, .profiles-card, .evidence-card, .legacy-card {
+.actions-card, .profiles-card, .evidence-card, .legacy-card, .accounts-card {
     background-color: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 8px;
@@ -102,7 +102,7 @@ body {
     text-align: left;
 }
 
-.actions-card h2, .profiles-card h2, .evidence-card h2 {
+.actions-card h2, .profiles-card h2, .evidence-card h2, .accounts-card h2 {
     margin-top: 0;
     margin-bottom: 12px;
     font-size: 16px;
@@ -167,10 +167,60 @@ body {
     font-size: 12px;
 }
 
-.btn-xs {
-    padding: 4px 8px;
-    font-size: 11px;
+.accounts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
 }
+
+.account-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+}
+
+.account-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.account-info strong {
+    font-size: 14px;
+    color: var(--text-main);
+}
+
+.account-info code {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.account-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.account-input {
+    flex: 1;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text-main);
+    font-size: 13px;
+    outline: none;
+}
+
+.account-input:focus {
+    border-color: var(--primary);
+}
+
 
 .profiles-grid {
     display: grid;
