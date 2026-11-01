@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"sync"
 
+	"wassap-desktop/internal/account"
 	"wassap-desktop/internal/appdirs"
 	"wassap-desktop/internal/browser"
+	"wassap-desktop/internal/storage"
 )
 
 // whatsappURL is the official WhatsApp Web address.
@@ -30,6 +32,7 @@ type App struct {
 	manager   *browser.Manager
 	host      HostController
 	inspector browser.Inspector
+	accountSvc account.Service
 
 	mu             sync.Mutex
 	currentProfile string
@@ -39,12 +42,24 @@ type App struct {
 func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	manager, host, insp := initPlatform(dirs)
 
+	repoPath := filepath.Join(dirs.Data, "accounts.json")
+	repo, repoErr := storage.NewJSONAccountRepository(repoPath)
+	var accountSvc account.Service
+	if repoErr != nil {
+		// A corrupt or unreadable repository disables account bindings instead of
+		// letting them panic. The file on disk is preserved for inspection.
+		fmt.Fprintf(os.Stderr, "storage: failed to initialize accounts repository: %v\n", repoErr)
+	} else {
+		accountSvc = account.NewService(repo, manager)
+	}
+
 	app := &App{
 		dirs:       dirs,
 		legacyMode: legacyMode,
 		manager:    manager,
 		host:       host,
 		inspector:  insp,
+		accountSvc: accountSvc,
 	}
 
 	// Ensure the default accounts A and B exist in the manager
@@ -52,6 +67,46 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	_ = manager.Create("account-b")
 
 	return app
+}
+
+// ListAccounts returns all registered accounts.
+func (a *App) ListAccounts() ([]account.Account, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.List()
+}
+
+// GetAccount returns an account by ID.
+func (a *App) GetAccount(id string) (*account.Account, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.Get(id)
+}
+
+// CreateAccount creates a new account with an isolated browser profile.
+func (a *App) CreateAccount(name string) (*account.Account, error) {
+	if a.accountSvc == nil {
+		return nil, fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.Create(name)
+}
+
+// RenameAccount changes the display name of an existing account.
+func (a *App) RenameAccount(id string, name string) error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.Rename(id, name)
+}
+
+// RemoveAccount deletes an account and its isolated browser profile.
+func (a *App) RemoveAccount(id string) error {
+	if a.accountSvc == nil {
+		return fmt.Errorf("account service not initialized")
+	}
+	return a.accountSvc.Remove(id)
 }
 
 // startup is called when the app starts. The context is saved so we can call
