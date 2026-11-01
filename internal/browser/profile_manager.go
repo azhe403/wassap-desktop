@@ -300,11 +300,12 @@ func (m *Manager) Delete(accountID string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		for _, l := range locks {
-			_ = l.Unlock()
-		}
-	}()
+	// On Windows, a directory containing open file handles (such as profile.lock)
+	// cannot be renamed or moved. We acquired the locks to prove exclusivity;
+	// we release them now before moving the directory into trash.
+	for _, l := range locks {
+		_ = l.Unlock()
+	}
 
 	dir := m.layout.ProfilePath(id)
 	if _, err := os.Stat(dir); err != nil {
