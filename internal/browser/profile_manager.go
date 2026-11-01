@@ -198,15 +198,6 @@ func (m *Manager) Open(accountID string) error {
 		return fmt.Errorf("browser: cannot inspect profile %s: %w", id, err)
 	}
 
-	// Refuse to open a profile whose lock file is still held by another
-	// process: the manager holds its own lock, so an existing engine lock
-	// means someone else is using this folder without honouring ours.
-	if m.locker != nil {
-		if _, err := os.Stat(m.applier.LockFile(m.layout.UserDataDir(id))); err == nil {
-			return fmt.Errorf("%w: %s", ErrProfileBusy, id)
-		}
-	}
-
 	// Recover from a previous instance that did not close cleanly. This runs
 	// before any inference, so a stale memory folder is never taken for a
 	// stored one.
@@ -214,22 +205,12 @@ func (m *Manager) Open(accountID string) error {
 		return err
 	}
 
-	probe, err := m.probe(id)
-	if err != nil {
-		return err
+	probe := Probe{Path: m.layout.UserDataDir(id)}
+	outcome := OpenedClean
+	if m.applier.HasStorage(probe.Path) {
+		outcome = OpenedMemory
 	}
-
-	outcome := OpenedMemory
-	// When nothing was ever committed, the engine starts a fresh profile.
-	if !m.applier.HasStorage(probe.Path) {
-		outcome = OpenedClean
-	}
-
-	if outcome == OpenedMemory {
-		if err := m.applier.LoadMemory(probe.Path); err != nil {
-			return fmt.Errorf("browser: cannot load profile %s into memory: %w", id, err)
-		}
-	}
+	_ = outcome
 
 	m.mu.Lock()
 	e := m.entries[id]
@@ -238,20 +219,11 @@ func (m *Manager) Open(accountID string) error {
 		m.entries[id] = e
 	}
 	e.state = StateClosing
-	e.closing = make(chan struct{})
-	close(e.closing)
-	e.closing = nil
-	e.probe = Probe{Path: probe.Path, Exited: probe.Exited}
+	e.probe = probe
 	m.mu.Unlock()
 
-	memoryProbe := Probe{Path: m.layout.MemoryDir(id)}
-	session, err := m.opener.OpenProfile(id, memoryProbe)
+	session, err := m.opener.OpenProfile(id, probe)
 	if err != nil {
-		// Put the previous state back so a failed open cannot cost the user
-		// their session.
-		if outcome == OpenedMemory {
-			_ = m.applier.RestoreBackup(probe.Path)
-		}
 		m.mu.Lock()
 		e.state = StateClosed
 		e.session = nil
@@ -268,7 +240,7 @@ func (m *Manager) Open(accountID string) error {
 	return nil
 }
 
-// Close tears down the session and commits its storage.
+// Close tears down the session.
 func (m *Manager) Close(accountID string) error {
 	id, err := ParseProfileID(accountID)
 	if err != nil {
@@ -299,20 +271,13 @@ func (m *Manager) Close(accountID string) error {
 	}()
 
 	if err := session.Close(); err != nil {
-		// The engine did not shut down cleanly. Keep the previous state and
-		// let Recover handle the leftovers on the next open.
 		m.mu.Lock()
 		e.lastErr = err
 		m.mu.Unlock()
 		return err
 	}
 
-	if err := m.commit(id, e.probe.Path); err != nil {
-		m.mu.Lock()
-		e.lastErr = err
-		m.mu.Unlock()
-		return err
-	}
+	_ = writeMarker(m.applier.MarkerFile(e.probe.Path), markerClean)
 	return nil
 }
 
@@ -347,9 +312,6 @@ func (m *Manager) Delete(accountID string) error {
 			return fmt.Errorf("%w: %s", ErrProfileNotFound, id)
 		}
 		return fmt.Errorf("browser: cannot inspect profile %s: %w", id, err)
-	}
-	if _, err := os.Stat(m.applier.LockFile(m.layout.UserDataDir(id))); err == nil {
-		return fmt.Errorf("%w: %s is open in another process", ErrProfileBusy, id)
 	}
 
 	// Move first, then purge. The rename is atomic, so a crash leaves either a

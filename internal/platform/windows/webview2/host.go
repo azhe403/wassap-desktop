@@ -109,9 +109,6 @@ func (h *Host) OpenProfile(id browser.ProfileID, probe browser.Probe) (browser.S
 	if err := os.MkdirAll(probe.Path, 0o700); err != nil {
 		return nil, fmt.Errorf("webview2: cannot create user data folder %s: %w", probe.Path, err)
 	}
-	if fileExists(filepath.Join(probe.Path, "LOCK")) {
-		return nil, fmt.Errorf("%w: %s", ErrProfileHasLiveBrowser, probe.Path)
-	}
 
 	s := &Session{
 		host:     h,
@@ -360,6 +357,13 @@ func (s *Session) setCloseErr(err error) {
 func (s *Session) run() {
 	lockOSThread()
 	defer unlockOSThread()
+
+	if err := initCOM(); err != nil {
+		s.requests <- openRequest{err: fmt.Errorf("webview2: cannot initialize COM: %w", err)}
+		close(s.done)
+		return
+	}
+	defer uninitCOM()
 
 	hwnd, err := s.createWindow()
 	if err != nil {

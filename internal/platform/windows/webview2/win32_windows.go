@@ -21,7 +21,10 @@ import (
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	ole32    = syscall.NewLazyDLL("ole32.dll")
 
+	procCoInitializeEx   = ole32.NewProc("CoInitializeEx")
+	procCoUninitialize   = ole32.NewProc("CoUninitialize")
 	procRegisterClassExW = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW  = user32.NewProc("CreateWindowExW")
 	procDestroyWindow    = user32.NewProc("DestroyWindow")
@@ -108,6 +111,19 @@ var sessions sync.Map // uintptr -> *Session
 func lockOSThread()   { runtime.LockOSThread() }
 func unlockOSThread() { runtime.UnlockOSThread() }
 
+func initCOM() error {
+	// COINIT_APARTMENTTHREADED = 0x2
+	hr, _, _ := procCoInitializeEx.Call(0, 2)
+	if hr == 0 || hr == 0x00000001 { // S_OK or S_FALSE
+		return nil
+	}
+	return fmt.Errorf("CoInitializeEx returned 0x%08x", uint32(hr))
+}
+
+func uninitCOM() {
+	procCoUninitialize.Call()
+}
+
 func (s *Session) createWindow() (uintptr, error) {
 	className, err := syscall.UTF16PtrFromString("WassapWebView2Session_" + string(s.profile))
 	if err != nil {
@@ -124,7 +140,7 @@ func (s *Session) createWindow() (uintptr, error) {
 	wc := wndClassEx{
 		size:       uint32(unsafe.Sizeof(wndClassEx{})),
 		style:      csOwndc | csHredraw,
-		wndProc:    syscall.NewCallback(dispatchWindowProc),
+		wndProc:    syscall.NewCallback(windowProc),
 		instance:   instance,
 		cursor:     cursor,
 		background: colorWindow + 1,
@@ -265,13 +281,6 @@ func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	}
 	ret, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wParam, lParam)
 	return ret
-}
-
-// dispatchWindowProc forwards a message to its session, then hands it to
-// Win32's default handling. syscall.NewCallback hands wParam to the last
-// parameter, so the argument order is fixed for every message.
-func dispatchWindowProc(lParam, wParam uintptr, message uint32, hwnd uintptr) uintptr {
-	return windowProc(hwnd, message, wParam, lParam)
 }
 
 func (s *Session) serveCallback() {
