@@ -383,6 +383,11 @@ func (s *Session) run() {
 
 	_ = setWindowTitle(hwnd, fmt.Sprintf("%s - %s", s.host.Title, s.profile))
 	_ = showWindow(hwnd)
+	if s.chromium != nil {
+		_ = s.chromium.Show()
+		s.chromium.Resize()
+		s.chromium.Focus()
+	}
 
 	s.setAlive(true)
 	s.requests <- openRequest{}

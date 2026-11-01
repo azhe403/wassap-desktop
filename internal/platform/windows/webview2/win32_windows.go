@@ -49,6 +49,8 @@ const (
 	// WM_USER are both process-local, so the value only has to avoid the
 	// messages user32 already defines.
 	wmInvokeCallback = 0x8000
+	wmSize           = 0x0005
+	wmSetFocus       = 0x0007
 	wmClose          = 0x0010
 	wmNCDestroy      = 0x0082
 
@@ -247,6 +249,7 @@ func (s *Session) setUpWebView() error {
 	}
 
 	s.chromium = c
+	_ = c.Show()
 	c.Resize()
 	if s.host.StartURL != "" {
 		c.Navigate(s.host.StartURL)
@@ -269,6 +272,20 @@ func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	case wmInvokeCallback:
 		if s, ok := sessions.Load(hwnd); ok {
 			s.(*Session).serveCallback()
+		}
+		return 0
+	case wmSize:
+		if s, ok := sessions.Load(hwnd); ok {
+			if sess, ok := s.(*Session); ok && sess.chromium != nil {
+				sess.chromium.Resize()
+			}
+		}
+		return 0
+	case wmSetFocus:
+		if s, ok := sessions.Load(hwnd); ok {
+			if sess, ok := s.(*Session); ok && sess.chromium != nil {
+				sess.chromium.Focus()
+			}
 		}
 		return 0
 	case wmClose:
