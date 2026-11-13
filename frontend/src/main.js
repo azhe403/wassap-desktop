@@ -5,6 +5,7 @@ import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
 import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
 import { showContextMenu } from './components/context-menu.js';
+import { renderSettingsPage } from './components/settings-page.js';
 
 // Access Wails backend bindings
 const getApp = () => window.go && window.go.main && window.go.main.App;
@@ -42,9 +43,11 @@ function showToast(message, type = 'info') {
 }
 
 /**
- * Notify backend about WebView visibility during modal dialogs
+ * Notify the backend about WebView visibility. The native child window must
+ * be hidden while a modal or the settings page owns the content area, and only
+ * the active account's session is restored afterwards.
  */
-function handleModalVisibility(visible) {
+function setWebViewVisible(visible) {
     const api = getApp();
     if (api && api.SetWebViewVisible) {
         api.SetWebViewVisible(visible).catch(() => {});
@@ -52,13 +55,42 @@ function handleModalVisibility(visible) {
 }
 
 /**
+ * Restore the native view for the active account, unless the settings page or
+ * a modal currently owns the content area.
+ */
+function restoreWebView() {
+    if (state.currentView === 'settings') {
+        setWebViewVisible(false);
+        return;
+    }
+    if (state.activeAccountId && state.openedAccountIds.has(state.activeAccountId)) {
+        setWebViewVisible(true);
+    }
+}
+
+/**
+ * Modal visibility handler: hide the native view while a dialog is open and
+ * restore whatever the current page should show when it closes.
+ */
+function handleModalVisibility(visible) {
+    if (!visible) {
+        setWebViewVisible(false);
+        return;
+    }
+    restoreWebView();
+}
+
+/**
  * Rerender UI from current state
  */
 function render() {
+    const isSettings = state.currentView === 'settings';
+    const effectiveActiveId = isSettings ? '__settings__' : state.activeAccountId;
+
     renderSidebar(
         sidebarContainer,
         state.accounts,
-        state.activeAccountId,
+        effectiveActiveId,
         state.switchingAccountId,
         {
             onSelectAccount: handleSelectAccount,
@@ -67,6 +99,18 @@ function render() {
             onSettings: handleOpenSettings,
         }
     );
+
+    if (isSettings) {
+        // Hide native WebView so the settings page is visible
+        setWebViewVisible(false);
+        contentView.className = 'settings-shell-view';
+        renderSettingsPage(contentView, {
+            onCloseToTrayChange: handleCloseToTrayChange,
+        });
+        return;
+    }
+
+    contentView.className = 'empty-state-view';
 
     if (state.accounts.length === 0) {
         renderEmptyState(contentView, handleOpenAddModal);
@@ -100,26 +144,43 @@ function render() {
  */
 async function handleSelectAccount(accountId, options = {}) {
     const isRestore = options.restore === true;
-    if (state.switchingAccountId) {
+    if (state.switching) {
         if (!isRestore) showToast('Account switching in progress, please wait...', 'info');
         return;
     }
-    if (state.activeAccountId === accountId && !isRestore) {
+
+    // Leaving the settings page returns to the account view.
+    const wasInSettings = state.currentView === 'settings';
+    state.currentView = 'account';
+
+    if (state.activeAccountId === accountId && !isRestore && !wasInSettings) {
         return;
     }
 
     const api = getApp();
     if (!api) return;
 
-    const isAlreadyOpened = state.openedAccountIds.has(accountId);
-    if (!isAlreadyOpened) {
-        state.switchingAccountId = accountId;
+    // Coming back from the settings page to the account that is already
+    // active: nothing to switch, just bring its session back on screen.
+    if (wasInSettings && state.activeAccountId === accountId && state.openedAccountIds.has(accountId)) {
+        restoreWebView();
         render();
-    } else {
-        // Instant visual feedback on the sidebar immediately
-        state.activeAccountId = accountId;
-        render();
+        return;
     }
+
+    const isAlreadyOpened = state.openedAccountIds.has(accountId);
+
+    state.switching = true;
+    if (isAlreadyOpened) {
+        // Instant feedback on the sidebar; no spinner, the session is live.
+        state.activeAccountId = accountId;
+    } else {
+        state.switchingAccountId = accountId;
+    }
+    // Stay hidden while the switch is in flight; the correct session is
+    // re-shown only after the backend finishes, so the old account never
+    // flashes over the placeholder.
+    render();
 
     try {
         await api.SwitchAccount(accountId);
@@ -132,7 +193,11 @@ async function handleSelectAccount(accountId, options = {}) {
         console.error('Failed to switch account:', err);
         showToast('Switch failed: ' + err, 'error');
     } finally {
+        state.switching = false;
         state.switchingAccountId = null;
+        // Re-show the right view even when the switch failed: otherwise the
+        // native session stays hidden behind an empty account page.
+        restoreWebView();
         render();
     }
 }
@@ -225,7 +290,27 @@ function handleContextMenu(x, y, account) {
 }
 
 function handleOpenSettings() {
-    showToast('Wassap Desktop v0.4.0 — Multi-Account Profile Isolation', 'info');
+    state.currentView = 'settings';
+    render();
+}
+
+async function handleCloseToTrayChange(enabled) {
+    const api = getApp();
+    if (api && api.SetCloseToTray) {
+        try {
+            await api.SetCloseToTray(enabled);
+            showToast(
+                enabled ? 'Close to tray enabled' : 'Close to tray disabled',
+                'success'
+            );
+            return true;
+        } catch (err) {
+            console.error('Failed to save settings:', err);
+            showToast('Failed to save settings: ' + err, 'error');
+            return false;
+        }
+    }
+    return false;
 }
 
 /**
@@ -286,6 +371,14 @@ function escapeHTML(str) {
 // Initial bootstrap
 window.addEventListener('DOMContentLoaded', () => {
     setupResizeObserver();
+
+    // Listen for tray menu "Settings" action
+    if (window.runtime && window.runtime.EventsOn) {
+        window.runtime.EventsOn('open-settings', () => {
+            handleOpenSettings();
+        });
+    }
+
     setTimeout(() => {
         (async () => {
             await refreshAccounts();

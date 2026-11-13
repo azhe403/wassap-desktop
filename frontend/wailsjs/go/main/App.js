@@ -30,6 +30,10 @@ export function GetActiveAccountID() {
   return window['go']['main']['App']['GetActiveAccountID']();
 }
 
+export function GetCloseToTray() {
+  return window['go']['main']['App']['GetCloseToTray']();
+}
+
 export function InspectProfile(arg1) {
   return window['go']['main']['App']['InspectProfile'](arg1);
 }
@@ -68,6 +72,10 @@ export function RemoveAccount(arg1) {
 
 export function RenameAccount(arg1, arg2) {
   return window['go']['main']['App']['RenameAccount'](arg1, arg2);
+}
+
+export function SetCloseToTray(arg1) {
+  return window['go']['main']['App']['SetCloseToTray'](arg1);
 }
 
 export function SetWebViewVisible(arg1) {

@@ -222,6 +222,11 @@ html, body {
     transform: scale(1.05);
 }
 
+.sidebar-icon-btn.active {
+    background-color: var(--accent-emerald);
+    color: #ffffff;
+}
+
 .sidebar-icon-btn:focus-visible {
     box-shadow: 0 0 0 2px var(--accent-active);
 }
@@ -412,6 +417,110 @@ html, body {
     margin-top: 8px;
     font-size: 12px;
     color: var(--danger-red);
+}
+
+/* Settings Modal */
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.settings-toggle-row:hover {
+    background-color: #182229;
+}
+
+.settings-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-toggle-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.settings-toggle-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.settings-checkbox {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent-emerald);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Settings Page View (full pane)
+   ========================================================================== */
+
+.settings-shell-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+}
+
+.settings-page-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 32px 48px;
+    max-width: 680px;
+    overflow-y: auto;
+}
+
+.settings-page-header {
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 16px;
+}
+
+.settings-page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+}
+
+.settings-page-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.settings-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent-emerald);
+    margin: 20px 0 10px 0;
 }
 
 .modal-footer {

@@ -82,12 +82,17 @@ func (a *App) attachMainWindow() {
 			h.SetParentWindow(hwnd, sidebarWidthPx)
 			log.Printf("webview2: attached main window handle %d", hwnd)
 		}
+
+		a.tray.Setup(hwnd)
 	}()
 }
 
 // ensureMainWindow blocks until the parent is attached; called before opening a session.
 func (a *App) ensureMainWindow() {
 	if h, ok := a.host.(*webview2.Host); ok && h.ParentHWND != 0 {
+		// The window is attached but the tray may never have been registered
+		// (attachMainWindow's probe times out silently); give it a retry.
+		a.retryTraySetup(h.ParentHWND)
 		return
 	}
 	hwnd := findMainWindowHWND(5 * time.Second)
@@ -99,6 +104,7 @@ func (a *App) ensureMainWindow() {
 		h.SetParentWindow(hwnd, sidebarWidthPx)
 		log.Printf("webview2: attached main window handle %d", hwnd)
 	}
+	a.retryTraySetup(hwnd)
 }
 
 func initPlatform(dirs appdirs.Dirs) (*browser.Manager, HostController, browser.Inspector) {

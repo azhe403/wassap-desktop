@@ -38,7 +38,7 @@ what exists today.
 | `internal/account` | `Account` model, ULID generation, name validation, `AccountService` |
 | `internal/storage` | `JSONAccountRepository` — atomic, concurrent-safe JSON persistence |
 | `internal/browser` | Platform-independent `ProfileManager` (create/open/close/delete, locks, crash recovery) |
-| `internal/platform/windows` | WebView2 host + Win32 locks + storage inspector |
+| `internal/platform/windows` | WebView2 host + Win32 locks + storage inspector + system tray (`tray/`) |
 | `internal/config` | Atomic JSON app configuration store (`config.json`) |
 | `app.go` / `main.go` | Wails facade: thin bindings, asset serving, legacy-mode redirect, window embedding |
 
@@ -68,3 +68,9 @@ Wassap Desktop preserves exactly one desktop window. Account switching occurs in
 4. **Modal Dialogs**: During rename/add/delete dialogs, the native child WebView is hidden to ensure full interactivity with the sidebar UI.
 
 Active account selection is restored from `config.json` at startup, with a fallback to the first valid account when the persisted reference becomes stale.
+
+## System Tray & Close-to-Tray
+
+The app registers a Windows system tray icon (`internal/platform/windows/tray`) on a dedicated hidden top-level window with its own locked thread (a top-level window receives `TaskbarCreated` broadcasts; a message-only window does not). The icon survives Explorer restarts: on `TaskbarCreated` the shell dropped the old icon, and the tray re-registers it. A single-instance lock (`options.SingleInstanceLock`, UUID `3f7f3db3-008c-4e3d-a134-0d66e741a2f1`) guarantees exactly one running instance; a second launch foregrounds the first (`OnSecondInstanceLaunch` → `App.showFromBackground`).
+
+When close-to-tray is enabled in Settings, closing the window hides it instead of exiting — but only if the tray icon is actually registered (`tray.Ready()`); otherwise the window closes normally so the app can never be left hidden with no way to quit. "Quit" in the tray menu (and only there) truly exits the app; `OnBeforeClose` lets that exit proceed.

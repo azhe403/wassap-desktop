@@ -19,11 +19,12 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// shellUserDataPath returns a unique user data folder for the Wails shell.
-// WebView2 refuses to create a second controller for a user data folder that is
-// already in use, so a leftover engine process from a previous run would break
-// start-up. The folder name carries the process id, which keeps concurrent
-// runs apart and leaves no stale lock behind.
+// shellUserDataPath returns a fresh user data folder for the Wails shell.
+// WebView2 refuses to create a controller for a user data folder that is
+// already in use, so a leftover engine process from a crashed run would break
+// start-up. The folder name carries the process id so stale locks never block
+// a restart. With the single-instance lock, concurrent runs are impossible;
+// old run-* folders are harmless leftovers.
 func shellUserDataPath(dirs appdirs.Dirs) string {
 	return filepath.Join(dirs.Data, "wails-shell", fmt.Sprintf("run-%d", os.Getpid()))
 }
@@ -79,6 +80,12 @@ func main() {
 		AssetServer:      assetOpts,
 		OnStartup:        app.startup,
 		OnDomReady:       app.domReady,
+		OnBeforeClose:    app.onBeforeClose,
+		OnShutdown:       app.shutdown,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "3f7f3db3-008c-4e3d-a134-0d66e741a2f1",
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		},
 		Bind: []interface{}{
 			app,
 		},

@@ -28,6 +28,48 @@ func TestJSONStore_MissingFileReturnsDefault(t *testing.T) {
 	if active != "" {
 		t.Errorf("expected empty active account, got %q", active)
 	}
+
+	tray, err := store.GetCloseToTray()
+	if err != nil {
+		t.Fatalf("GetCloseToTray() unexpected error: %v", err)
+	}
+	if tray != false {
+		t.Errorf("expected CloseToTray false by default, got %v", tray)
+	}
+}
+
+func TestJSONStore_SaveAndLoadCloseToTray(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	store := config.NewStore(configPath)
+
+	if err := store.SetCloseToTray(true); err != nil {
+		t.Fatalf("SetCloseToTray(true) failed: %v", err)
+	}
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+	if !cfg.CloseToTray {
+		t.Errorf("expected CloseToTray true, got false")
+	}
+
+	val, err := store.GetCloseToTray()
+	if err != nil {
+		t.Fatalf("GetCloseToTray() failed: %v", err)
+	}
+	if !val {
+		t.Errorf("expected GetCloseToTray() true, got false")
+	}
+
+	if err := store.SetCloseToTray(false); err != nil {
+		t.Fatalf("SetCloseToTray(false) failed: %v", err)
+	}
+	val, _ = store.GetCloseToTray()
+	if val {
+		t.Errorf("expected GetCloseToTray() false, got true")
+	}
 }
 
 func TestJSONStore_SaveAndLoadActiveAccount(t *testing.T) {

@@ -15,6 +15,9 @@ import (
 	"wassap-desktop/internal/browser"
 	"wassap-desktop/internal/config"
 	"wassap-desktop/internal/storage"
+
+	"github.com/wailsapp/wails/v2/pkg/options"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // whatsappURL is the official WhatsApp Web address.
@@ -45,6 +48,22 @@ type App struct {
 	currentProfile string
 	activeAccount  string
 	switching      bool
+	closeToTray    bool
+	forceQuit      bool
+
+	tray trayBackend
+}
+
+// trayBackend is the platform tray implementation. On Windows it is a real
+// system-tray controller (internal/platform/windows/tray); on other platforms
+// it is a no-op. The tray owns a hidden top-level window.
+type trayBackend interface {
+	// Setup creates the tray icon on its dedicated hidden top-level window.
+	Setup(hwnd uintptr)
+	// Remove destroys the tray icon and its owner window.
+	Remove()
+	// Ready reports whether the tray icon is registered with the shell.
+	Ready() bool
 }
 
 // NewApp creates a new App application struct.
@@ -64,6 +83,10 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 
 	cfgPath := filepath.Join(dirs.Config, "config.json")
 	cfgStore := config.NewStore(cfgPath)
+	closeToTray, err := cfgStore.GetCloseToTray()
+	if err != nil {
+		log.Printf("app: cannot load close-to-tray preference, defaulting to off: %v", err)
+	}
 
 	app := &App{
 		dirs:        dirs,
@@ -73,7 +96,9 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 		inspector:   insp,
 		accountSvc:  accountSvc,
 		configStore: cfgStore,
+		closeToTray: closeToTray,
 	}
+	app.tray = newTrayBackend(app)
 
 	// Restore active account from config on startup
 	if accountSvc != nil {
@@ -278,16 +303,142 @@ func (a *App) NotifyWindowResize(width, height int) error {
 	return nil
 }
 
+// GetCloseToTray returns whether the app should minimize to tray on window close.
+func (a *App) GetCloseToTray() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.closeToTray
+}
+
+// SetCloseToTray updates and persists the close-to-tray preference.
+func (a *App) SetCloseToTray(enabled bool) error {
+	a.mu.Lock()
+	a.closeToTray = enabled
+	a.mu.Unlock()
+
+	if a.configStore != nil {
+		return a.configStore.SetCloseToTray(enabled)
+	}
+	return nil
+}
+
+// onBeforeClose is called by Wails before closing the main window.
+// If close-to-tray is enabled and the tray icon is actually registered (and
+// the exit was not forced via tray "Quit"), it hides the window and prevents
+// app exit; otherwise it allows normal exit so the app is never left hidden
+// with no way to quit.
+//
+// Exit flushes WebView2 sessions BEFORE Wails destroys its window. Once the
+// parent window is gone, the embedded child session windows are orphaned and
+// their session threads can no longer respond to teardown callbacks — every
+// teardown would wait out the call timeout and the app would appear to hang.
+// shutdown() repeats CloseCurrent as a safety net; it is a no-op for sessions
+// already closed.
+func (a *App) onBeforeClose(ctx context.Context) (prevent bool) {
+	// Read the flags under the mutex only; WindowHide marshals to the Wails
+	// runtime and may block, so it must not run while we hold a.mu.
+	a.mu.Lock()
+	forceQuit := a.forceQuit
+	closeToTray := a.closeToTray
+	a.mu.Unlock()
+
+	// Hide to tray only on an ordinary close with the preference enabled;
+	// tray "Quit" (forceQuit) really exits.
+	if closeToTray && a.trayReady() && !forceQuit {
+		wailsRuntime.WindowHide(ctx)
+		return true
+	}
+	// Flush the sessions while the child windows are still reachable.
+	_ = a.CloseCurrent()
+	return false
+}
+
+// quitApp marks forceQuit and exits the application cleanly.
+func (a *App) quitApp() {
+	a.mu.Lock()
+	a.forceQuit = true
+	ctx := a.ctx
+	a.mu.Unlock()
+
+	if ctx != nil {
+		wailsRuntime.Quit(ctx)
+	}
+}
+
+// showFromBackground brings the main window back to the foreground and
+// restores the active session's visibility. It is used by the tray "Open"
+// action and when a second instance of the application is launched while a
+// first instance is hidden to the tray.
+func (a *App) showFromBackground() {
+	a.mu.Lock()
+	ctx := a.ctx
+	act := a.activeAccount
+	a.mu.Unlock()
+	if ctx != nil {
+		wailsRuntime.WindowShow(ctx)
+		wailsRuntime.WindowUnminimise(ctx)
+	}
+	if a.host != nil && act != "" {
+		a.host.SetActiveSession(browser.ProfileID(act))
+	}
+}
+
+// onSecondInstanceLaunch is called by the single-instance lock in the already
+// running instance when the user launches the app again. The second process
+// exits by itself; this brings the first instance to the front.
+func (a *App) onSecondInstanceLaunch(data options.SecondInstanceData) {
+	log.Printf("app: second instance launch intercepted (args=%v); restoring first instance", data.Args)
+	a.showFromBackground()
+}
+
+// trayReady reports whether the tray icon is registered and usable.
+func (a *App) trayReady() bool {
+	if a.tray == nil {
+		return false
+	}
+	return a.tray.Ready()
+}
+
+// retryTraySetup attempts tray registration once more if it never succeeded
+// (e.g. the main window was not visible when attachMainWindow ran, or
+// Shell_NotifyIconW rejected the icon). Setup() is idempotent once the icon
+// is registered, so this is safe to call from multiple probe points.
+func (a *App) retryTraySetup(hwnd uintptr) {
+	if hwnd == 0 || a.tray == nil {
+		return
+	}
+	if a.tray.Ready() {
+		return
+	}
+	a.tray.Setup(hwnd)
+}
+
 // startup is called when the app starts. The context is saved so we can call
 // the runtime methods.
 func (a *App) startup(ctx context.Context) {
+	a.mu.Lock()
 	a.ctx = ctx
+	a.mu.Unlock()
+}
+
+// shutdown is called when the app is closing. It tears down the system tray
+// and flushes all browser sessions.
+func (a *App) shutdown(ctx context.Context) {
+	log.Printf("shutdown: start")
+	if a.tray != nil {
+		a.tray.Remove()
+		log.Printf("shutdown: tray removed")
+	}
+	_ = a.CloseCurrent()
+	log.Printf("shutdown: complete")
 }
 
 // domReady is called when the frontend DOM is fully loaded. It attaches the
 // native child window embedding to Wails's main window before any session opens.
 func (a *App) domReady(ctx context.Context) {
+	a.mu.Lock()
 	a.ctx = ctx
+	a.mu.Unlock()
 	a.attachMainWindow()
 }
 
@@ -339,15 +490,24 @@ func (a *App) CloseAccount(accountID string) error {
 
 // CloseCurrent closes all live WebView2 sessions, flushing every profile to disk.
 func (a *App) CloseCurrent() error {
+	log.Printf("close-current: start")
 	a.mu.Lock()
 	a.currentProfile = ""
 	a.mu.Unlock()
 
 	if a.manager != nil {
-		_ = a.manager.CloseAll()
+		log.Printf("close-current: closing manager sessions")
+		if err := a.manager.CloseAll(); err != nil {
+			log.Printf("close-current: manager CloseAll error: %v", err)
+		}
+		log.Printf("close-current: manager sessions closed")
 	}
 	if a.host != nil {
-		return a.host.CloseAll()
+		log.Printf("close-current: closing host sessions")
+		if err := a.host.CloseAll(); err != nil {
+			log.Printf("close-current: host CloseAll error: %v", err)
+		}
+		log.Printf("close-current: host sessions closed")
 	}
 	return nil
 }

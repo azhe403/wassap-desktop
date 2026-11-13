@@ -17,6 +17,8 @@ export function GetAccount(arg1:string):Promise<account.Account>;
 
 export function GetActiveAccountID():Promise<string>;
 
+export function GetCloseToTray():Promise<boolean>;
+
 export function InspectProfile(arg1:string):Promise<Array<browser.Evidence>>;
 
 export function ListAccounts():Promise<Array<account.Account>>;
@@ -36,6 +38,8 @@ export function OpenLegacyPecut1():Promise<void>;
 export function RemoveAccount(arg1:string):Promise<void>;
 
 export function RenameAccount(arg1:string,arg2:string):Promise<void>;
+
+export function SetCloseToTray(arg1:boolean):Promise<void>;
 
 export function SetWebViewVisible(arg1:boolean):Promise<void>;
 

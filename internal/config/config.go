@@ -18,6 +18,7 @@ var ErrCorruptConfig = errors.New("config: file is corrupt")
 // AppConfig represents persisted application configuration.
 type AppConfig struct {
 	ActiveAccountID string `json:"activeAccountId,omitempty"`
+	CloseToTray     bool   `json:"closeToTray"`
 }
 
 // Store defines access to application configuration.
@@ -26,6 +27,8 @@ type Store interface {
 	Save(cfg *AppConfig) error
 	SetActiveAccount(accountID string) error
 	GetActiveAccount() (string, error)
+	SetCloseToTray(enabled bool) error
+	GetCloseToTray() (bool, error)
 }
 
 // JSONStore is a thread-safe, atomic file-backed configuration store.
@@ -44,7 +47,10 @@ func NewStore(path string) Store {
 func (s *JSONStore) Load() (*AppConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.loadLocked()
+}
 
+func (s *JSONStore) loadLocked() (*AppConfig, error) {
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return &AppConfig{}, nil
@@ -66,7 +72,10 @@ func (s *JSONStore) Load() (*AppConfig, error) {
 func (s *JSONStore) Save(cfg *AppConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveLocked(cfg)
+}
 
+func (s *JSONStore) saveLocked(cfg *AppConfig) error {
 	if cfg == nil {
 		cfg = &AppConfig{}
 	}
@@ -114,14 +123,23 @@ func (s *JSONStore) Save(cfg *AppConfig) error {
 	return nil
 }
 
-// SetActiveAccount updates and persists the active account ID.
-func (s *JSONStore) SetActiveAccount(accountID string) error {
-	cfg, err := s.Load()
+// update applies fn to the current configuration and persists the result
+// atomically while holding the store's write lock, so concurrent updates
+// cannot silently overwrite each other.
+func (s *JSONStore) update(fn func(*AppConfig)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.loadLocked()
 	if err != nil {
 		return err
 	}
-	cfg.ActiveAccountID = accountID
-	return s.Save(cfg)
+	fn(cfg)
+	return s.saveLocked(cfg)
+}
+
+// SetActiveAccount updates and persists the active account ID.
+func (s *JSONStore) SetActiveAccount(accountID string) error {
+	return s.update(func(cfg *AppConfig) { cfg.ActiveAccountID = accountID })
 }
 
 // GetActiveAccount loads and returns the active account ID.
@@ -131,4 +149,18 @@ func (s *JSONStore) GetActiveAccount() (string, error) {
 		return "", err
 	}
 	return cfg.ActiveAccountID, nil
+}
+
+// SetCloseToTray updates and persists the close-to-tray preference.
+func (s *JSONStore) SetCloseToTray(enabled bool) error {
+	return s.update(func(cfg *AppConfig) { cfg.CloseToTray = enabled })
+}
+
+// GetCloseToTray loads and returns the close-to-tray preference.
+func (s *JSONStore) GetCloseToTray() (bool, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return false, err
+	}
+	return cfg.CloseToTray, nil
 }

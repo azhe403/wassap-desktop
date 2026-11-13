@@ -1,4 +1,5 @@
 import { getInitials, getAvatarColor } from '../utils/avatar.js';
+import logoIcon from '../assets/images/logo-universal.png';
 
 /**
  * Renders the vertical sidebar with account avatars.
@@ -13,8 +14,8 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
     container.innerHTML = `
         <aside class="app-sidebar" aria-label="Account Switcher">
             <div class="sidebar-header">
-                <div class="sidebar-brand-icon" title="Wassap Desktop">
-                    <span>💬</span>
+                <div class="sidebar-brand-icon" title="Wassap Desktop" style="background: none;">
+                    <img src="${logoIcon}" alt="Wassap" style="width: 36px; height: 36px; border-radius: 8px; object-fit: contain;" />
                 </div>
             </div>
 
@@ -58,7 +59,7 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
                 <button id="btn-add-account" class="sidebar-icon-btn" title="Add Account" aria-label="Add Account">
                     <span>➕</span>
                 </button>
-                <button id="btn-settings" class="sidebar-icon-btn" title="Settings" aria-label="Settings">
+                <button id="btn-settings" class="sidebar-icon-btn ${activeId === '__settings__' ? 'active' : ''}" title="Settings" aria-label="Settings">
                     <span>⚙️</span>
                 </button>
             </div>
