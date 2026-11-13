@@ -91,6 +91,10 @@ type Host struct {
 	// activeID is the profile whose session window is currently visible;
 	// every other open session stays alive but hidden behind it.
 	activeID browser.ProfileID
+	// visible reports whether session windows may be shown at all. The frontend
+	// turns it off while a modal or the settings page owns the content area, so
+	// an account switch cannot superimpose a session over that page.
+	visible bool
 
 	mu       sync.Mutex
 	sessions map[*Session]struct{}
@@ -150,31 +154,49 @@ func (h *Host) UpdateBounds(width, height int) error {
 	return nil
 }
 
-// SetVisible shows or hides open sessions (used during modal dialogs).
+// shouldShowSession reports whether a session window must be visible for the
+// requested visibility and the active profile. Only the active session is
+// shown: every open account is embedded at the same position, so showing them
+// all would stack them on top of each other. When no session is active yet,
+// none are shown.
+func shouldShowSession(visible bool, profile, active browser.ProfileID) bool {
+	if !visible {
+		return false
+	}
+	return active != "" && profile == active
+}
+
+// SetVisible shows or hides open sessions (used during modal dialogs and the
+// settings page). Showing restores only the active session, so the other
+// accounts stay hidden behind it instead of stacking on top of each other.
 func (h *Host) SetVisible(visible bool) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.visible = visible
+	active := h.activeID
+	sessions := make([]*Session, 0, len(h.sessions))
 	for s := range h.sessions {
-		_ = s.call(func() error {
-			if s.hwnd != 0 {
-				if visible {
-					_ = showWindow(s.hwnd)
-				} else {
-					hideWindow(s.hwnd)
-				}
-			}
-			return nil
-		})
+		sessions = append(sessions, s)
+	}
+	h.mu.Unlock()
+
+	for _, s := range sessions {
+		if shouldShowSession(visible, s.profile, active) {
+			_ = s.Show()
+		} else {
+			_ = s.Hide()
+		}
 	}
 	return nil
 }
 
 // SetActiveSession makes the session for id visible and hides every other open
 // session, so the app can switch accounts by swapping visibility instead of
-// tearing engines down.
+// tearing engines down. While the frontend owns the content area (settings
+// page or a modal) no session is shown.
 func (h *Host) SetActiveSession(id browser.ProfileID) {
 	h.mu.Lock()
 	h.activeID = id
+	allowed := h.visible
 	sessions := make([]*Session, 0, len(h.sessions))
 	for s := range h.sessions {
 		sessions = append(sessions, s)
@@ -188,7 +210,7 @@ func (h *Host) SetActiveSession(id browser.ProfileID) {
 		}
 	}
 	for _, s := range sessions {
-		if s == active {
+		if allowed && s == active {
 			_ = s.Show()
 		} else {
 			_ = s.Hide()
@@ -223,6 +245,7 @@ func NewHost(title, startURL string) *Host {
 		Bounds:       Rect{X: 120, Y: 80, Width: 1180, Height: 820},
 		CloseTimeout: 30 * time.Second,
 		CloseGrace:   10 * time.Second,
+		visible:      true,
 		sessions:     make(map[*Session]struct{}),
 	}
 }
@@ -257,8 +280,9 @@ func (h *Host) OpenProfile(id browser.ProfileID, probe browser.Probe) (browser.S
 	h.sessions[s] = struct{}{}
 	// Remember which session is visible; the run loop opens this window
 	// hidden when another one is already active, so switching accounts only
-	// swaps visibility instead of destroying engines.
-	startHidden := h.ParentHWND != 0 && h.activeID != "" && h.activeID != id
+	// swaps visibility instead of destroying engines. The window also stays
+	// hidden while the frontend owns the content area (settings page, modal).
+	startHidden := h.ParentHWND != 0 && ((h.activeID != "" && h.activeID != id) || !h.visible)
 	h.mu.Unlock()
 	s.startHidden = startHidden
 
@@ -624,6 +648,11 @@ func (s *Session) teardown() {
 	s.emit(EventClosed, nil)
 }
 
+// callTimeout bounds how long a caller waits for a session callback to be
+// served. Session threads can become unreachable when their window is
+// destroyed by a parent's teardown, so a callback must never block forever.
+const callTimeout = 3 * time.Second
+
 // call runs f on the session's UI thread and returns its error.
 func (s *Session) call(f func() error) error {
 	if s.hwnd == 0 {
@@ -638,7 +667,13 @@ func (s *Session) call(f func() error) error {
 		s.callbacks.CompareAndSwap(s.callbacks.Load(), nil)
 		return errors.New("webview2: cannot post to the session window")
 	}
-	return <-result
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(callTimeout):
+		s.callbacks.CompareAndSwap(s.callbacks.Load(), nil)
+		return errors.New("webview2: session call timed out")
+	}
 }
 
 func fileExists(path string) bool {
