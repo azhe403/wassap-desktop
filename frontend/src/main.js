@@ -5,7 +5,7 @@ import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
 import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
 import { renderSettingsPage } from './components/settings-page.js';
-import { renderProfilesPage } from './components/profiles-page.js';
+import { renderProfilesPage, updateProfilesUsage } from './components/profiles-page.js';
 
 // Access Wails backend bindings
 const getApp = () => window.go && window.go.main && window.go.main.App;
@@ -116,6 +116,7 @@ function render() {
         renderSettingsPage(contentView, {
             onCloseToTrayChange: handleCloseToTrayChange,
         });
+        updateUsageChip();
         return;
     }
 
@@ -127,6 +128,8 @@ function render() {
             onRename: handleRenameAccount,
             onRemove: handleRemoveAccount,
         });
+        if (state.resourceUsage) updateProfilesUsage(state.resourceUsage);
+        updateUsageChip();
         return;
     }
 
@@ -157,6 +160,7 @@ function render() {
             </div>
         `;
     }
+    updateUsageChip();
 }
 
 /**
@@ -320,6 +324,84 @@ async function handleCloseToTrayChange(enabled) {
 }
 
 /**
+ * Compact byte formatter for the sidebar footprint chip (MB-first).
+ */
+function formatUsageBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 MB';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    if (mb >= 1) return `${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB`;
+    return `${Math.round(bytes / 1024)} KB`;
+}
+
+/**
+ * Paints the latest resource sample into the sidebar chip. The chip is
+ * re-created by every sidebar re-render, so this is safe to call any time.
+ */
+function updateUsageChip() {
+    const chip = document.querySelector('#sidebar-usage-chip');
+    if (!chip) return;
+    const usage = state.resourceUsage;
+    const ram = chip.querySelector('.usage-ram');
+    const cpu = chip.querySelector('.usage-cpu');
+    if (!usage || (!usage.totalWorkingSetBytes && !usage.totalCPUPercent)) {
+        if (ram) ram.textContent = '– MB';
+        if (cpu) cpu.textContent = '–%';
+        return;
+    }
+    if (ram) ram.textContent = formatUsageBytes(usage.totalWorkingSetBytes || 0);
+    if (cpu) cpu.textContent = `${(usage.totalCPUPercent || 0).toFixed(1)}% CPU`;
+    chip.title = `Wassap Desktop — total ${formatUsageBytes(usage.totalWorkingSetBytes || 0)} RAM, ${(usage.totalCPUPercent || 0).toFixed(1)}% CPU` +
+        ` (app ${formatUsageBytes(usage.appWorkingSetBytes || 0)}, profiles ${formatUsageBytes((usage.totalWorkingSetBytes || 0) - (usage.appWorkingSetBytes || 0))})`;
+}
+
+/**
+ * Polls the backend for process stats. Drives the sidebar chip and, while
+ * the Profile Management page is open, its per-account breakdown too.
+ */
+function startResourceUsagePolling() {
+    const tick = async () => {
+        const api = getApp();
+        if (!api || !api.GetResourceUsage) return;
+        try {
+            const usage = await api.GetResourceUsage();
+            state.resourceUsage = normalizeUsage(usage);
+        } catch (err) {
+            console.error('Failed to sample resource usage:', err);
+            return;
+        }
+        updateUsageChip();
+        if (state.currentView === 'profiles') {
+            updateProfilesUsage(state.resourceUsage);
+        }
+    };
+    tick();
+    setInterval(tick, 2000);
+}
+
+/**
+ * Wails returns Go structs with the JSON keys we tagged; normalize the few
+ * numeric fields we rely on so the UI never formats undefined.
+ */
+function normalizeUsage(raw) {
+    const u = raw || {};
+    const profiles = Array.isArray(u.profiles) ? u.profiles : [];
+    return {
+        appWorkingSetBytes: Number(u.appWorkingSetBytes) || 0,
+        appCPUPercent: Number(u.appCPUPercent) || 0,
+        totalWorkingSetBytes: Number(u.totalWorkingSetBytes) || 0,
+        totalCPUPercent: Number(u.totalCPUPercent) || 0,
+        profiles: profiles.map(p => ({
+            id: p.id,
+            running: !!p.running,
+            processCount: Number(p.processCount) || 0,
+            workingSetBytes: Number(p.workingSetBytes) || 0,
+            cpuPercent: Number(p.cpuPercent) || 0,
+        })),
+    };
+}
+
+/**
  * Refresh account list from backend with retry until bridge is ready
  */
 async function refreshAccounts(retryCount = 0) {
@@ -377,6 +459,7 @@ function escapeHTML(str) {
 // Initial bootstrap
 window.addEventListener('DOMContentLoaded', () => {
     setupResizeObserver();
+    startResourceUsagePolling();
 
     // Desktop shell has no browser chrome: suppress the WebView2 default
     // context menu everywhere, except in text fields where paste/inspect

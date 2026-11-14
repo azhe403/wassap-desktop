@@ -128,3 +128,66 @@ export namespace browser {
 
 }
 
+export namespace main {
+	
+	export class ProfileResourceUsage {
+	    id: string;
+	    running: boolean;
+	    processCount: number;
+	    workingSetBytes: number;
+	    cpuPercent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProfileResourceUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.running = source["running"];
+	        this.processCount = source["processCount"];
+	        this.workingSetBytes = source["workingSetBytes"];
+	        this.cpuPercent = source["cpuPercent"];
+	    }
+	}
+	export class ResourceUsage {
+	    appWorkingSetBytes: number;
+	    appCPUPercent: number;
+	    totalWorkingSetBytes: number;
+	    totalCPUPercent: number;
+	    profiles: ProfileResourceUsage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appWorkingSetBytes = source["appWorkingSetBytes"];
+	        this.appCPUPercent = source["appCPUPercent"];
+	        this.totalWorkingSetBytes = source["totalWorkingSetBytes"];
+	        this.totalCPUPercent = source["totalCPUPercent"];
+	        this.profiles = this.convertValues(source["profiles"], ProfileResourceUsage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+

@@ -631,6 +631,62 @@ html, body {
     color: var(--danger-red);
 }
 
+.profile-mgmt-resources {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.profile-mgmt-resources.idle {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.profiles-total-usage {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: -8px 0 16px 0;
+    padding: 9px 14px;
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-variant-numeric: tabular-nums;
+}
+
+.profiles-total-usage strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.sidebar-usage-chip {
+    margin-top: 2px;
+    padding: 2px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.25;
+    cursor: default;
+}
+
+.usage-ram {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.usage-cpu {
+    font-size: 9px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 .profile-partial-flag {
     color: #f0b429;
     font-weight: 600;

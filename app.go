@@ -38,10 +38,10 @@ type App struct {
 	dirs       appdirs.Dirs
 	legacyMode bool
 
-	manager   *browser.Manager
-	host      HostController
-	inspector browser.Inspector
-	accountSvc account.Service
+	manager     *browser.Manager
+	host        HostController
+	inspector   browser.Inspector
+	accountSvc  account.Service
 	configStore config.Store
 
 	mu             sync.Mutex
@@ -50,6 +50,10 @@ type App struct {
 	switching      bool
 	closeToTray    bool
 	forceQuit      bool
+
+	statsMu        sync.Mutex
+	statsLastTicks map[uint32]uint64
+	statsLastAt    time.Time
 
 	tray trayBackend
 }

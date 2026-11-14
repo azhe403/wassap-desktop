@@ -62,6 +62,10 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
                 <button id="btn-settings" class="sidebar-icon-btn ${activeId === '__settings__' ? 'active' : ''}" title="Settings" aria-label="Settings">
                     <span>⚙️</span>
                 </button>
+                <div id="sidebar-usage-chip" class="sidebar-usage-chip" role="status" title="Wassap Desktop total resource usage">
+                    <span class="usage-ram">– MB</span>
+                    <span class="usage-cpu">–%</span>
+                </div>
             </div>
         </aside>
     `;

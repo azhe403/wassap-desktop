@@ -17,6 +17,7 @@ export function renderProfilesPage(container, accounts, activeId, handlers = {})
                 <h2 class="settings-page-title">Profile Management</h2>
                 <p class="settings-page-subtitle">Rename, remove and inspect your account profiles. Each account keeps its own isolated browser storage.</p>
             </div>
+            <div class="profiles-total-usage" id="profiles-total-usage">Reading resource usage…</div>
 
             ${accounts.length === 0 ? `
                 <p class="profiles-empty">No accounts yet. Add one with the ➕ button in the sidebar.</p>
@@ -74,6 +75,7 @@ function renderCard(acc, activeId) {
                     </div>
                     <div class="profile-mgmt-meta">Created ${escapeHTML(createdLabel)}</div>
                     <div class="profile-mgmt-storage" data-storage-for="${escapeAttr(acc.id)}">Reading storage…</div>
+                    <div class="profile-mgmt-resources" data-resources-for="${escapeAttr(acc.id)}">Reading usage…</div>
                 </div>
             </div>
             <div class="profile-mgmt-actions">
@@ -187,6 +189,41 @@ function formatBytes(bytes) {
         unit += 1;
     }
     return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+/**
+ * Paints a fresh resource sample into the page. Called by the app's 2-second
+ * polling loop while the page is open; safe to call with the page closed.
+ */
+export function updateProfilesUsage(usage) {
+    if (!usage) return;
+
+    const totalEl = document.getElementById('profiles-total-usage');
+    if (totalEl) {
+        totalEl.innerHTML = `Wassap Desktop total&nbsp; <strong>${formatUsageBytes(usage.totalWorkingSetBytes)} RAM</strong> · <strong>${usage.totalCPUPercent.toFixed(1)}% CPU</strong>`;
+    }
+
+    const sep = '<span class="profile-storage-sep">·</span>';
+    document.querySelectorAll('.profile-mgmt-resources').forEach(el => {
+        const id = el.getAttribute('data-resources-for');
+        const p = (usage.profiles || []).find(x => x.id === id);
+        if (!p || !p.running) {
+            el.textContent = 'Not running — no CPU/RAM in use';
+            el.classList.add('idle');
+            return;
+        }
+        el.classList.remove('idle');
+        const procLabel = `${p.processCount} process${p.processCount === 1 ? '' : 'es'}`;
+        el.innerHTML = `<span class="profile-state-badge open">running</span>${sep}${escapeHTML(procLabel)}${sep}${formatUsageBytes(p.workingSetBytes)} RAM${sep}${p.cpuPercent.toFixed(1)}% CPU`;
+    });
+}
+
+function formatUsageBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 MB';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    if (mb >= 1) return `${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB`;
+    return `${Math.round(bytes / 1024)} KB`;
 }
 
 function escapeHTML(str) {

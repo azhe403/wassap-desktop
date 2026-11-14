@@ -12,5 +12,6 @@ export const state = {
     openedAccountIds: new Set(),
     isLoading: true,
     error: null,
+    resourceUsage: null, // last sample from GetResourceUsage (polled every 2s)
     currentView: 'account', // 'account' | 'settings' | 'profiles'
 };

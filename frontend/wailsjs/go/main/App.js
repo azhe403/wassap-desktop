@@ -34,6 +34,10 @@ export function GetCloseToTray() {
   return window['go']['main']['App']['GetCloseToTray']();
 }
 
+export function GetResourceUsage() {
+  return window['go']['main']['App']['GetResourceUsage']();
+}
+
 export function InspectProfile(arg1) {
   return window['go']['main']['App']['InspectProfile'](arg1);
 }
