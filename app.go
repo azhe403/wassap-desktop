@@ -379,8 +379,11 @@ func (a *App) showFromBackground() {
 	act := a.activeAccount
 	a.mu.Unlock()
 	if ctx != nil {
+		// WindowUnminimise is deliberately not called: Wails implements it
+		// with WM_SYSCOMMAND(SC_RESTORE), which un-maximises a maximised
+		// window to the normal width/height. WindowShow alone restores a
+		// minimised window and leaves a maximised one maximised.
 		wailsRuntime.WindowShow(ctx)
-		wailsRuntime.WindowUnminimise(ctx)
 	}
 	if a.host != nil && act != "" {
 		a.host.SetActiveSession(browser.ProfileID(act))
