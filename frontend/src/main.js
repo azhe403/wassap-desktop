@@ -3,8 +3,9 @@ import './app.css';
 
 import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
-import { showAddAccountModal } from './components/modal.js';
+import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
 import { renderSettingsPage } from './components/settings-page.js';
+import { renderProfilesPage } from './components/profiles-page.js';
 
 // Access Wails backend bindings
 const getApp = () => window.go && window.go.main && window.go.main.App;
@@ -54,11 +55,19 @@ function setWebViewVisible(visible) {
 }
 
 /**
+ * Views that own the content area and therefore require the native WebView
+ * to stay hidden.
+ */
+function isContentOwningView(view) {
+    return view === 'settings' || view === 'profiles';
+}
+
+/**
  * Restore the native view for the active account, unless the settings page or
  * a modal currently owns the content area.
  */
 function restoreWebView() {
-    if (state.currentView === 'settings') {
+    if (isContentOwningView(state.currentView)) {
         setWebViewVisible(false);
         return;
     }
@@ -84,7 +93,8 @@ function handleModalVisibility(visible) {
  */
 function render() {
     const isSettings = state.currentView === 'settings';
-    const effectiveActiveId = isSettings ? '__settings__' : state.activeAccountId;
+    const isProfiles = state.currentView === 'profiles';
+    const effectiveActiveId = isSettings ? '__settings__' : isProfiles ? '__profiles__' : state.activeAccountId;
 
     renderSidebar(
         sidebarContainer,
@@ -95,6 +105,7 @@ function render() {
             onSelectAccount: handleSelectAccount,
             onAddAccount: handleOpenAddModal,
             onSettings: handleOpenSettings,
+            onProfileManagement: handleOpenProfileManagement,
         }
     );
 
@@ -104,6 +115,17 @@ function render() {
         contentView.className = 'settings-shell-view';
         renderSettingsPage(contentView, {
             onCloseToTrayChange: handleCloseToTrayChange,
+        });
+        return;
+    }
+
+    if (isProfiles) {
+        // Hide native WebView so the profile management page is visible
+        setWebViewVisible(false);
+        contentView.className = 'settings-shell-view';
+        renderProfilesPage(contentView, state.accounts, state.activeAccountId, {
+            onRename: handleRenameAccount,
+            onRemove: handleRemoveAccount,
         });
         return;
     }
@@ -147,20 +169,21 @@ async function handleSelectAccount(accountId, options = {}) {
         return;
     }
 
-    // Leaving the settings page returns to the account view.
-    const wasInSettings = state.currentView === 'settings';
+    // Leaving a content-owning view (settings, profile management) returns
+    // to the account view.
+    const wasInContentView = isContentOwningView(state.currentView);
     state.currentView = 'account';
 
-    if (state.activeAccountId === accountId && !isRestore && !wasInSettings) {
+    if (state.activeAccountId === accountId && !isRestore && !wasInContentView) {
         return;
     }
 
     const api = getApp();
     if (!api) return;
 
-    // Coming back from the settings page to the account that is already
+    // Coming back from a content-owning view to the account that is already
     // active: nothing to switch, just bring its session back on screen.
-    if (wasInSettings && state.activeAccountId === accountId && state.openedAccountIds.has(accountId)) {
+    if (wasInContentView && state.activeAccountId === accountId && state.openedAccountIds.has(accountId)) {
         restoreWebView();
         render();
         return;
@@ -228,6 +251,53 @@ function handleOpenAddModal() {
 function handleOpenSettings() {
     state.currentView = 'settings';
     render();
+}
+
+function handleOpenProfileManagement() {
+    state.currentView = 'profiles';
+    render();
+}
+
+function handleRenameAccount(account) {
+    showRenameModal({
+        currentName: account.name,
+        onVisibilityChange: handleModalVisibility,
+        onConfirm: async (name) => {
+            const api = getApp();
+            if (!api) return;
+            try {
+                await api.RenameAccount(account.id, name);
+                showToast(`Renamed account to "${name}"`, 'success');
+                await refreshAccounts();
+            } catch (err) {
+                console.error('Rename account failed:', err);
+                showToast('Failed to rename account: ' + err, 'error');
+            }
+        },
+    });
+}
+
+function handleRemoveAccount(account) {
+    showConfirmModal({
+        title: 'Remove Account',
+        message: `Remove "${account.name}" and delete its isolated browser profile? This cannot be undone.`,
+        confirmText: 'Remove',
+        isDanger: true,
+        onVisibilityChange: handleModalVisibility,
+        onConfirm: async () => {
+            const api = getApp();
+            if (!api) return;
+            try {
+                await api.RemoveAccount(account.id);
+                state.openedAccountIds.delete(account.id);
+                showToast(`Removed account "${account.name}"`, 'success');
+                await refreshAccounts();
+            } catch (err) {
+                console.error('Remove account failed:', err);
+                showToast('Failed to remove account: ' + err, 'error');
+            }
+        },
+    });
 }
 
 async function handleCloseToTrayChange(enabled) {

@@ -63,6 +63,27 @@ html, body {
     margin-bottom: 12px;
 }
 
+.sidebar-brand-btn {
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    outline: none;
+}
+
+.sidebar-brand-btn:hover {
+    transform: scale(1.05);
+}
+
+.sidebar-brand-btn.active {
+    border-radius: 10px;
+    box-shadow: 0 0 0 2px var(--accent-active);
+}
+
+.sidebar-brand-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-active);
+}
+
 .sidebar-brand-icon {
     width: 40px;
     height: 40px;
@@ -73,7 +94,7 @@ html, body {
     justify-content: center;
     color: #ffffff;
     font-size: 20px;
-    cursor: default;
+    cursor: pointer;
 }
 
 .sidebar-divider {
@@ -512,6 +533,185 @@ html, body {
     font-size: 13px;
     color: var(--text-secondary);
     margin: 0;
+}
+
+/* ==========================================================================
+    Profile Management Page
+    ========================================================================== */
+
+.profiles-page-view {
+    max-width: 720px;
+}
+
+.profiles-empty {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.profiles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.profile-mgmt-card {
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.profile-mgmt-card.active {
+    border-color: rgba(37, 211, 102, 0.4);
+}
+
+.profile-mgmt-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.account-avatar-static {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.profile-mgmt-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.profile-mgmt-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.profile-mgmt-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-mgmt-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.profile-mgmt-storage {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.profile-storage-sep {
+    color: var(--text-muted);
+}
+
+.profile-storage-missing {
+    color: var(--danger-red);
+}
+
+.profile-partial-flag {
+    color: #f0b429;
+    font-weight: 600;
+}
+
+.profile-state-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.profile-state-badge.open {
+    background-color: rgba(37, 211, 102, 0.15);
+    color: var(--accent-active);
+}
+
+.profile-state-badge.closed {
+    background-color: rgba(134, 150, 160, 0.15);
+    color: var(--text-secondary);
+}
+
+.profile-mgmt-actions {
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.btn-small {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 16px;
+}
+
+.btn-danger:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.profile-mgmt-evidence {
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.evidence-loading {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.evidence-rows {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.evidence-rows th,
+.evidence-rows td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.evidence-rows th {
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.evidence-rows tr:last-child td {
+    border-bottom: none;
+}
+
+.evidence-rows .evidence-warn td {
+    color: #f0b429;
 }
 
 .settings-section-title {

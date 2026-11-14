@@ -12,5 +12,5 @@ export const state = {
     openedAccountIds: new Set(),
     isLoading: true,
     error: null,
-    currentView: 'account', // 'account' | 'settings'
+    currentView: 'account', // 'account' | 'settings' | 'profiles'
 };

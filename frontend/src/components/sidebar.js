@@ -14,9 +14,9 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
     container.innerHTML = `
         <aside class="app-sidebar" aria-label="Account Switcher">
             <div class="sidebar-header">
-                <div class="sidebar-brand-icon" title="Wassap Desktop" style="background: none;">
+                <button id="btn-profile-management" class="sidebar-brand-icon sidebar-brand-btn ${activeId === '__profiles__' ? 'active' : ''}" title="Profile Management" aria-label="Profile Management" style="background: none;">
                     <img src="${logoIcon}" alt="Wassap" style="width: 36px; height: 36px; border-radius: 8px; object-fit: contain;" />
-                </div>
+                </button>
             </div>
 
             <div class="sidebar-divider"></div>
@@ -40,7 +40,7 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
                                 aria-selected="${isActive ? 'true' : 'false'}"
                                 data-id="${acc.id}"
                             >
-                                <span>${initials}</span>
+                                <span>${escapeHTML(initials)}</span>
                                 <span class="unread-badge" aria-hidden="true"></span>
                                 ${isSwitching ? `
                                     <div class="switching-overlay" aria-label="Switching profile">
@@ -84,6 +84,11 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
     if (settingsBtn && handlers.onSettings) {
         settingsBtn.addEventListener('click', handlers.onSettings);
     }
+
+    const profilesBtn = container.querySelector('#btn-profile-management');
+    if (profilesBtn && handlers.onProfileManagement) {
+        profilesBtn.addEventListener('click', handlers.onProfileManagement);
+    }
 }
 
 /**
@@ -108,6 +113,11 @@ export function renderEmptyState(container, onAddAccount) {
     if (btn && onAddAccount) {
         btn.addEventListener('click', onAddAccount);
     }
+}
+
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeAttr(str) {
