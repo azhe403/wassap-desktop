@@ -53,3 +53,10 @@ func initPlatform(dirs appdirs.Dirs) (*browser.Manager, HostController, browser.
 func (a *App) attachMainWindow() {}
 
 func (a *App) ensureMainWindow() {}
+
+// wirePlatformNotifications is a no-op off Windows; notifications are a
+// WebView2 feature.
+func (a *App) wirePlatformNotifications() {}
+
+// platformBringToFront is a no-op off Windows.
+func (a *App) platformBringToFront() {}

@@ -287,6 +287,12 @@ func (s *Session) setUpWebView() error {
 	}
 	c.SetErrorCallback(report)
 	c.DataPath = s.path
+	// WhatsApp Web raises desktop alerts through the Web Notification API.
+	// WebView2 resolves an unset permission state to deny for notifications,
+	// so without an explicit allow the notification API never fires and no
+	// toast ever appears. The sessions only ever load the WhatsApp host, so
+	// allowing this one permission kind is scoped to that content.
+	c.SetPermission(edge.CoreWebView2PermissionKindNotifications, edge.CoreWebView2PermissionStateAllow)
 	c.ProcessFailedCallback = func(_ *edge.ICoreWebView2, args *edge.ICoreWebView2ProcessFailedEventArgs) {
 		if args == nil {
 			report(fmt.Errorf("webview2: unknown process failure for %s", s.profile))
@@ -326,6 +332,16 @@ func (s *Session) setUpWebView() error {
 	}
 
 	s.chromium = c
+	// Install the notification account label before the first navigation so
+	// every page load, not just the start page, sees the wrapper.
+	if err := injectAccountLabel(s, c); err != nil {
+		log.Printf("webview2: cannot inject notification label for %s: %v", s.profile, err)
+	}
+	wireNotificationClickMessage(s, c)
+	// Durably grant the notification permission for the WhatsApp origin in
+	// the profile: an already-persisted deny cannot be lifted by the
+	// request-time handler.
+	allowNotificationPermission(s, c, "https://web.whatsapp.com")
 	// Set default background to WhatsApp dark #111b21 (alpha=255, R=17, G=27, B=33)
 	// so the WebView2 compositor buffer never flashes white during resize or navigation.
 	_ = SetControllerBackgroundColor(c.GetController(), 0xFF, 17, 27, 33)

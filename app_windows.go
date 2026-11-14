@@ -5,6 +5,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
@@ -14,6 +15,7 @@ import (
 	"wassap-desktop/internal/platform/windows/oslock"
 	webview2 "wassap-desktop/internal/platform/windows/webview2"
 	"wassap-desktop/internal/platform/windows/webview2/inspector"
+	"wassap-desktop/internal/storage"
 )
 
 // sidebarWidthPx must match the frontend's --sidebar-width CSS value.
@@ -67,6 +69,17 @@ func findMainWindowHWND(timeout time.Duration) uintptr {
 	}
 }
 
+// wirePlatformNotifications connects the session host's notification click
+// hook to the app's onNotificationActivate, so clicking a desktop notification
+// from any account restores the window and switches to it.
+func (a *App) wirePlatformNotifications() {
+	if h, ok := a.host.(*webview2.Host); ok {
+		h.OnNotificationClick = func(id browser.ProfileID) {
+			a.onNotificationActivate(string(id))
+		}
+	}
+}
+
 // attachMainWindow runs at startup and attaches the host to the main window once it is visible.
 func (a *App) attachMainWindow() {
 	if a.host == nil {
@@ -110,6 +123,21 @@ func (a *App) ensureMainWindow() {
 func initPlatform(dirs appdirs.Dirs) (*browser.Manager, HostController, browser.Inspector) {
 	layout := browser.NewLayout(dirs.Data)
 	host := webview2.NewHost("Wassap Desktop", whatsappURL)
+	// Map profile ids to account display names (accounts.json) so sessions
+	// can tag notifications with the originating account. Best effort: a
+	// missing file or read error just means raw ids are used.
+	if repo, err := storage.NewJSONAccountRepository(filepath.Join(dirs.Data, "accounts.json")); err == nil {
+		if accounts, err := repo.List(); err == nil {
+			names := make(map[browser.ProfileID]string, len(accounts))
+			for _, acct := range accounts {
+				names[browser.ProfileID(acct.ID)] = acct.Name
+			}
+			host.SetDisplayNames(names)
+			log.Printf("webview2: notification labels loaded for %d accounts", len(names))
+		} else {
+			log.Printf("webview2: cannot read accounts for notification labels: %v", err)
+		}
+	}
 	insp := inspector.New(layout)
 
 	deps := browser.ManagerDeps{

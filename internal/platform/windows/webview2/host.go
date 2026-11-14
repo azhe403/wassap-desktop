@@ -91,6 +91,14 @@ type Host struct {
 	// activeID is the profile whose session window is currently visible;
 	// every other open session stays alive but hidden behind it.
 	activeID browser.ProfileID
+	// DisplayNames maps profile id to the account display name from
+	// accounts.json (e.g. "account-a" -> "a01"). Used to tag notifications
+	// with the originating account. Missing ids fall back to the raw id.
+	DisplayNames map[browser.ProfileID]string
+	// OnNotificationClick is called when the user clicks a notification the
+	// session's pages created. The hook runs on its own goroutine; it must
+	// not block the session's message pump.
+	OnNotificationClick func(browser.ProfileID)
 	// visible reports whether session windows may be shown at all. The frontend
 	// turns it off while a modal or the settings page owns the content area, so
 	// an account switch cannot superimpose a session over that page.
@@ -98,6 +106,14 @@ type Host struct {
 
 	mu       sync.Mutex
 	sessions map[*Session]struct{}
+}
+
+// ParentHandle returns the main window handle the sessions are embedded in,
+// or zero when sessions run as standalone top-level windows.
+func (h *Host) ParentHandle() uintptr {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.ParentHWND
 }
 
 // SetParentWindow configures the parent window and sidebar offset, and hooks
@@ -216,6 +232,29 @@ func (h *Host) SetActiveSession(id browser.ProfileID) {
 			_ = s.Hide()
 		}
 	}
+}
+
+// SetDisplayNames replaces the profile-id to account-name mapping used for
+// notification labels. Called once at start-up, before any session opens.
+func (h *Host) SetDisplayNames(names map[browser.ProfileID]string) {
+	cp := make(map[browser.ProfileID]string, len(names))
+	for k, v := range names {
+		cp[k] = v
+	}
+	h.mu.Lock()
+	h.DisplayNames = cp
+	h.mu.Unlock()
+}
+
+// Label returns the account label used to distinguish notifications: the
+// account display name when known, otherwise the raw profile id.
+func (h *Host) Label(id browser.ProfileID) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if name, ok := h.DisplayNames[id]; ok && name != "" {
+		return name
+	}
+	return string(id)
 }
 
 // ActiveSessionID returns the profile id currently shown; empty when none.
@@ -385,6 +424,10 @@ type Session struct {
 	// OnEvent is called from arbitrary threads for lifecycle events and must
 	// not block.
 	OnEvent func(SessionEvent)
+	// keepAlive pins Go objects handed to WebView2 COM that outlives the
+	// call site (one-shot completion handlers), so the GC cannot free the
+	// impl while the browser process still holds a raw pointer to it.
+	keepAlive []any
 
 	hwnd     uintptr
 	instance uintptr

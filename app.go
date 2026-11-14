@@ -103,6 +103,7 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 		closeToTray: closeToTray,
 	}
 	app.tray = newTrayBackend(app)
+	app.wirePlatformNotifications()
 
 	// Restore active account from config on startup
 	if accountSvc != nil {
@@ -388,6 +389,32 @@ func (a *App) showFromBackground() {
 	if a.host != nil && act != "" {
 		a.host.SetActiveSession(browser.ProfileID(act))
 	}
+}
+
+// onNotificationActivate is called when the user clicks a desktop
+// notification created by one of the session's pages. It brings the main
+// window to the front and tells the frontend which account the notification
+// came from; the frontend then runs its usual switch flow so the sidebar and
+// the visible session stay consistent. The page's own onclick handler also
+// runs and navigates the session to the chat.
+func (a *App) onNotificationActivate(id string) {
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx == nil {
+		return
+	}
+	// WindowUnminimise is deliberately not called: Wails implements it with
+	// WM_SYSCOMMAND(SC_RESTORE), which un-maximises a maximised window to
+	// the normal width/height. WindowShow alone restores a minimised window
+	// and leaves a maximised one maximised.
+	wailsRuntime.WindowShow(ctx)
+	// A notification-click is input to the WebView2 browser process, not to
+	// this one, so SetForegroundWindow alone cannot win foreground rights.
+	// platformBringToFront uses the attach-thread-input trick to force the
+	// window to the front on Windows (no-op elsewhere).
+	a.platformBringToFront()
+	wailsRuntime.EventsEmit(ctx, "notification:activate", id)
 }
 
 // onSecondInstanceLaunch is called by the single-instance lock in the already

@@ -477,6 +477,13 @@ window.addEventListener('DOMContentLoaded', () => {
         window.runtime.EventsOn('open-settings', () => {
             handleOpenSettings();
         });
+        // The backend emits this when a desktop notification is clicked:
+        // bring the app forward and switch to the account that sent it.
+        window.runtime.EventsOn('notification:activate', (accountId) => {
+            if (accountId) {
+                handleSelectAccount(accountId, { restore: true });
+            }
+        });
     }
 
     setTimeout(() => {
