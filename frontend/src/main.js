@@ -3,8 +3,7 @@ import './app.css';
 
 import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
-import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
-import { showContextMenu } from './components/context-menu.js';
+import { showAddAccountModal } from './components/modal.js';
 import { renderSettingsPage } from './components/settings-page.js';
 
 // Access Wails backend bindings
@@ -94,7 +93,6 @@ function render() {
         state.switchingAccountId,
         {
             onSelectAccount: handleSelectAccount,
-            onContextMenu: handleContextMenu,
             onAddAccount: handleOpenAddModal,
             onSettings: handleOpenSettings,
         }
@@ -227,68 +225,6 @@ function handleOpenAddModal() {
     });
 }
 
-/**
- * Rename Account modal flow
- */
-function handleOpenRenameModal(account) {
-    showRenameModal({
-        currentName: account.name,
-        onVisibilityChange: handleModalVisibility,
-        onConfirm: async (newName) => {
-            const api = getApp();
-            if (!api) return;
-            try {
-                await api.RenameAccount(account.id, newName);
-                showToast('Account renamed', 'success');
-                await refreshAccounts();
-            } catch (err) {
-                console.error('Rename failed:', err);
-                showToast('Rename failed: ' + err, 'error');
-            }
-        },
-    });
-}
-
-/**
- * Remove Account flow
- */
-function handleRemoveAccount(account) {
-    if (account.id === state.activeAccountId) {
-        showToast('Cannot remove active account. Switch to another account first.', 'error');
-        return;
-    }
-
-    showConfirmModal({
-        title: 'Remove Account',
-        message: `Are you sure you want to remove "${account.name}"? Its browser session and storage profile will be permanently deleted.`,
-        confirmText: 'Delete Permanently',
-        isDanger: true,
-        onVisibilityChange: handleModalVisibility,
-        onConfirm: async () => {
-            const api = getApp();
-            if (!api) return;
-            try {
-                await api.RemoveAccount(account.id);
-                showToast(`Account "${account.name}" removed`, 'success');
-                await refreshAccounts();
-            } catch (err) {
-                console.error('Remove failed:', err);
-                showToast('Remove failed: ' + err, 'error');
-            }
-        },
-    });
-}
-
-/**
- * Context menu handler
- */
-function handleContextMenu(x, y, account) {
-    showContextMenu(x, y, account, {
-        onRename: handleOpenRenameModal,
-        onRemove: handleRemoveAccount,
-    });
-}
-
 function handleOpenSettings() {
     state.currentView = 'settings';
     render();
@@ -371,6 +307,17 @@ function escapeHTML(str) {
 // Initial bootstrap
 window.addEventListener('DOMContentLoaded', () => {
     setupResizeObserver();
+
+    // Desktop shell has no browser chrome: suppress the WebView2 default
+    // context menu everywhere, except in text fields where paste/inspect
+    // of the input itself is still useful. Native WhatsApp Web content is
+    // a separate window and unaffected by this.
+    document.addEventListener('contextmenu', (e) => {
+        if (e.target.closest('input, textarea, [contenteditable="true"]')) {
+            return;
+        }
+        e.preventDefault();
+    });
 
     // Listen for tray menu "Settings" action
     if (window.runtime && window.runtime.EventsOn) {

@@ -66,20 +66,12 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
         </aside>
     `;
 
-    // Bind avatar clicks and right-clicks
+    // Bind avatar clicks
     container.querySelectorAll('.account-avatar-btn').forEach(btn => {
         const id = btn.getAttribute('data-id');
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             if (handlers.onSelectAccount) handlers.onSelectAccount(id);
-        });
-
-        btn.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            const account = accounts.find(a => a.id === id);
-            if (account && handlers.onContextMenu) {
-                handlers.onContextMenu(e.clientX, e.clientY, account);
-            }
         });
     });
 
