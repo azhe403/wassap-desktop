@@ -227,6 +227,13 @@ func (a *App) RestartToApplyUpdate() error {
 	if dl.State != "downloaded" || dl.StagedPath == "" {
 		return errors.New("no staged update; download first")
 	}
+	// Belt-and-braces: refuse to install a staged build the world has moved
+	// past, even if the completion-time discard never got a chance to run.
+	if staged := dl.StagedVersion; staged != "" {
+		if latest := a.lastStatusSnapshot().LatestVersion; latest != "" && latest != staged {
+			return fmt.Errorf("staged update %s is superseded by %s; download the latest first", staged, latest)
+		}
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -375,6 +382,21 @@ func (a *App) startDownload() {
 	if err != nil {
 		log.Printf("updater: download failed: %v", err)
 		a.setDLState(dlDownloadState{State: "error", Message: err.Error()})
+		a.emitUpdateStatus()
+		return
+	}
+
+	// The release can move while a download is in flight. If a fresher check
+	// already resolved a different latest version, installing what we just
+	// staged would be the exact mismatch this path exists to prevent:
+	// discard it instead of staging it as "new".
+	if _, superseded := resetDownloadStateIfStale(
+		dlDownloadState{State: "downloaded", StagedVersion: stagedVersion},
+		a.lastStatusSnapshot().LatestVersion,
+	); superseded {
+		log.Printf("updater: discarding staged %s — a fresher release is already known", stagedVersion)
+		_ = os.Remove(res.Path)
+		a.setDLState(dlDownloadState{})
 		a.emitUpdateStatus()
 		return
 	}
