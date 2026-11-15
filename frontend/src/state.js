@@ -14,4 +14,5 @@ export const state = {
     error: null,
     resourceUsage: null, // last sample from GetResourceUsage (polled every 2s)
     currentView: 'account', // 'account' | 'settings' | 'profiles'
+    updateBadge: false, // true when an update is available (or downloaded) and not dismissed
 };

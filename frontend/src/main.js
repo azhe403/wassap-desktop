@@ -4,7 +4,7 @@ import './app.css';
 import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
 import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
-import { renderSettingsPage } from './components/settings-page.js';
+import { renderSettingsPage, updateSettingsStatusRow } from './components/settings-page.js';
 import { renderProfilesPage, updateProfilesUsage } from './components/profiles-page.js';
 
 // Access Wails backend bindings
@@ -89,6 +89,18 @@ function handleModalVisibility(visible) {
 }
 
 /**
+ * Toggle the sidebar Settings badge dot to reflect whether an update is
+ * known and not dismissed. Called after every render() and on update:status
+ * events.
+ */
+function applyUpdateBadge() {
+    const dot = document.querySelector('#btn-settings .update-badge');
+    if (dot) {
+        dot.classList.toggle('visible', !!state.updateBadge);
+    }
+}
+
+/**
  * Rerender UI from current state
  */
 function render() {
@@ -108,6 +120,7 @@ function render() {
             onProfileManagement: handleOpenProfileManagement,
         }
     );
+    applyUpdateBadge();
 
     if (isSettings) {
         // Hide native WebView so the settings page is visible
@@ -484,6 +497,20 @@ window.addEventListener('DOMContentLoaded', () => {
                 handleSelectAccount(accountId, { restore: true });
             }
         });
+        // Backend → frontend update status pushes.
+        window.runtime.EventsOn('update:status', (s) => {
+            state.updateBadge = !!s && (s.state === 'available' || s.state === 'downloaded') && !s.dismissed;
+            applyUpdateBadge();
+            updateSettingsStatusRow(s);
+        });
+    }
+
+    const goApp = window.go && window.go.main && window.go.main.App;
+    if (goApp && goApp.GetUpdateStatus) {
+        goApp.GetUpdateStatus().then((s) => {
+            state.updateBadge = !!s && (s.state === 'available' || s.state === 'downloaded') && !s.dismissed;
+            applyUpdateBadge();
+        }).catch(() => {});
     }
 
     setTimeout(() => {
