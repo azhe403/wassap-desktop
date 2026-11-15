@@ -25,6 +25,11 @@ type UpdateCheckCache struct {
 	StagedAsset      string    `json:"stagedAsset,omitempty"`
 	StagedDigest     string    `json:"stagedDigest,omitempty"`
 	DismissedVersion string    `json:"dismissedVersion,omitempty"`
+	// LastAttempt is when the last check ran (success or failure); LastError
+	// carries the last failure's message ("" after a success). They implement
+	// the retry backoff: 12h after success, 1h after failure.
+	LastAttempt time.Time `json:"lastAttempt,omitempty"`
+	LastError   string    `json:"lastError,omitempty"`
 }
 
 // Dismissed reports whether the given latest-version value was dismissed by
