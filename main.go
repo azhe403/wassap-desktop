@@ -4,6 +4,7 @@ import (
 	"embed"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,6 +51,20 @@ func main() {
 	}
 	if err := appdirs.Ensure(dirs); err != nil {
 		log.Fatalf("cannot create application directories: %v", err)
+	}
+
+	// Mirror logs to a file as well as stderr so close-path diagnostics are
+	// available even when the app is launched from a double-click. Append;
+	// the file is regenerable cache content, mirroring what Ensure skips.
+	if err := os.MkdirAll(dirs.Cache, 0o700); err != nil {
+		log.Printf("log: cannot create cache dir %s: %v", dirs.Cache, err)
+	}
+	logPath := filepath.Join(dirs.Cache, "wassap-desktop.log")
+	if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err != nil {
+		log.Printf("log: cannot open %s, stderr only: %v", logPath, err)
+	} else {
+		log.SetOutput(io.MultiWriter(os.Stderr, f))
+		log.Printf("log: started, writing to %s", logPath)
 	}
 
 	app := NewApp(dirs, legacyMode)

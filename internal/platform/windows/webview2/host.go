@@ -116,8 +116,13 @@ func (h *Host) ParentHandle() uintptr {
 	return h.ParentHWND
 }
 
-// SetParentWindow configures the parent window and sidebar offset, and hooks
-// the parent's native Win32 WM_SIZE messages for instant real-time resizing.
+// SetParentWindow configures the parent window and sidebar offset, and attempts
+// to subclass the parent's native Win32 messages. The subclass has never been
+// installed successfully: SetWindowSubclass returns 0 (failure) and that error
+// path is unhandled, so this is effectively a no-op today — child resizing is
+// driven from the frontend's resize handler through App.NotifyWindowResize ->
+// Host.UpdateBounds -> ResizeChildren. Kept for the day the subclass is fixed,
+// at which point it would provide frame-accurate updates without JS.
 func (h *Host) SetParentWindow(hwnd uintptr, sidebarWidth int) {
 	h.mu.Lock()
 	h.ParentHWND = hwnd
@@ -127,10 +132,7 @@ func (h *Host) SetParentWindow(hwnd uintptr, sidebarWidth int) {
 	SubclassParentWindow(hwnd, h)
 }
 
-// ResizeChildren immediately resizes every child window to match the parent
-// window's client dimensions. Because this runs directly in the parent's native
-// Win32 WM_SIZE proc, it updates synchronously on every single frame as the user
-// drags the window border.
+// ResizeChildren immediately resizes every child window to match the parent window's client dimensions.
 func (h *Host) ResizeChildren(parentWidth, parentHeight int) {
 	h.mu.Lock()
 	sidebarWidth := h.SidebarWidth
@@ -350,9 +352,11 @@ func (h *Host) CloseAll() error {
 
 	var firstErr error
 	for _, s := range all {
+		sessionStart := time.Now()
 		if err := s.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
+		log.Printf("webview2: CloseAll: session %s done in %s", s.profile, time.Since(sessionStart))
 	}
 	return firstErr
 }
@@ -546,6 +550,7 @@ func (s *Session) Focus() error {
 // WebView2 controller and environment, or until the close timeout elapses.
 func (s *Session) Close() error {
 	s.closeOnce.Do(func() {
+		closeStart := time.Now()
 		log.Printf("webview2: closing session %s hwnd=%d", s.profile, s.hwnd)
 		s.closed = make(chan struct{})
 		go func() {
@@ -563,6 +568,7 @@ func (s *Session) Close() error {
 			s.setCloseErr(err)
 		}
 		<-s.closed
+		log.Printf("webview2: session %s closed in %s", s.profile, time.Since(closeStart))
 		s.host.forget(s)
 	})
 	s.closeMu.Lock()

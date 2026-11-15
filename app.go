@@ -50,8 +50,8 @@ type App struct {
 	switching      bool
 	closeToTray    bool
 	forceQuit      bool
-
-	windowState *config.WindowState
+	quitting       bool
+	windowState    *config.WindowState
 
 	geomPending *config.WindowState
 	geomTimer   *time.Timer
@@ -412,17 +412,48 @@ func (a *App) onBeforeClose(ctx context.Context) (prevent bool) {
 	a.mu.Lock()
 	forceQuit := a.forceQuit
 	closeToTray := a.closeToTray
+	quitting := a.quitting
 	a.mu.Unlock()
+	log.Printf("beforeclose: enter (forceQuit=%v closeToTray=%v quitting=%v)", forceQuit, closeToTray, quitting)
+
+	// Flush pending geometry before deciding; the window still exists here
+	// and its latest bounds are the ones the user left it in.
+	flushStart := time.Now()
+	a.flushWindowGeometry()
+	log.Printf("beforeclose: geometry flush took %s", time.Since(flushStart))
 
 	// Hide to tray only on an ordinary close with the preference enabled;
 	// tray "Quit" (forceQuit) really exits.
-	if closeToTray && a.trayReady() && !forceQuit {
+	if closeToTray && a.trayReady() && !forceQuit && !quitting {
 		wailsRuntime.WindowHide(ctx)
 		return true
 	}
-	// Flush the sessions while the child windows are still reachable.
-	_ = a.CloseCurrent()
-	return false
+
+	// The teardown path for a real quit. Sessions are flushed BEFORE Wails
+	// destroys its window (once the parent goes, embedded child windows are
+	// orphaned and their teardown stalls), but a wedged WebView2 session can
+	// hold this path hostage for a long time — observed at 33s per session on
+	// both sessions every time. Doing that inline froze the window for over a
+	// minute. So hide the window now, tear down in the background, and only
+	// then let Wails destroy the window. The process still exits only after
+	// the flush completes, preserving the guarantee above.
+	a.mu.Lock()
+	if a.quitting {
+		// Reached via quitApp once teardown is done; allow the close.
+		a.mu.Unlock()
+		return false
+	}
+	a.quitting = true
+	a.mu.Unlock()
+
+	wailsRuntime.WindowHide(ctx)
+	go func() {
+		closeStart2 := time.Now()
+		_ = a.CloseCurrent()
+		log.Printf("beforeclose: background CloseCurrent took %s", time.Since(closeStart2))
+		a.quitApp()
+	}()
+	return true
 }
 
 // quitApp marks forceQuit and exits the application cleanly.
@@ -528,6 +559,7 @@ func (a *App) startup(ctx context.Context) {
 // shutdown is called when the app is closing. It tears down the system tray
 // and flushes all browser sessions.
 func (a *App) shutdown(ctx context.Context) {
+	shutdownStart := time.Now()
 	log.Printf("shutdown: start")
 	a.mu.Lock()
 	if a.geomStop != nil {
@@ -544,13 +576,18 @@ func (a *App) shutdown(ctx context.Context) {
 	} else {
 		a.mu.Unlock()
 	}
+	flushStart := time.Now()
 	a.flushWindowGeometry()
+	log.Printf("shutdown: geometry flush took %s", time.Since(flushStart))
 	if a.tray != nil {
+		trayStart := time.Now()
 		a.tray.Remove()
-		log.Printf("shutdown: tray removed")
+		log.Printf("shutdown: tray removed in %s", time.Since(trayStart))
 	}
+	closeStart := time.Now()
 	_ = a.CloseCurrent()
-	log.Printf("shutdown: complete")
+	log.Printf("shutdown: CloseCurrent took %s", time.Since(closeStart))
+	log.Printf("shutdown: complete in %s", time.Since(shutdownStart))
 }
 
 // domReady is called when the frontend DOM is fully loaded. It attaches the
@@ -622,17 +659,19 @@ func (a *App) CloseCurrent() error {
 
 	if a.manager != nil {
 		log.Printf("close-current: closing manager sessions")
+		closeStart := time.Now()
 		if err := a.manager.CloseAll(); err != nil {
 			log.Printf("close-current: manager CloseAll error: %v", err)
 		}
-		log.Printf("close-current: manager sessions closed")
+		log.Printf("close-current: manager sessions closed in %s", time.Since(closeStart))
 	}
 	if a.host != nil {
 		log.Printf("close-current: closing host sessions")
+		closeStart := time.Now()
 		if err := a.host.CloseAll(); err != nil {
 			log.Printf("close-current: host CloseAll error: %v", err)
 		}
-		log.Printf("close-current: host sessions closed")
+		log.Printf("close-current: host sessions closed in %s", time.Since(closeStart))
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -327,13 +328,29 @@ func (m *Manager) CloseAll() error {
 	}
 	m.mu.Unlock()
 
-	var firstErr error
-	for _, e := range open {
-		if err := m.Close(string(e.id)); err != nil && firstErr == nil {
-			firstErr = err
+	// Teardowns are independent (separate user data directories and session
+	// threads), so run them concurrently. Wedged sessions used to serialize
+	// this into a minutes-long freeze; in parallel the worst case is one
+	// teardown timeout total. The error returned is the first (lowest-index)
+	// error, matching the deterministic order of the previous serial version.
+	errs := make([]error, len(open))
+	var wg sync.WaitGroup
+	for i, e := range open {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			accountStart := time.Now()
+			errs[i] = m.Close(string(e.id))
+			log.Printf("manager: CloseAll: %s done in %s", e.id, time.Since(accountStart))
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
 		}
 	}
-	return firstErr
+	return nil
 }
 
 // Close tears down the session.

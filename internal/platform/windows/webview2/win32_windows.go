@@ -533,9 +533,12 @@ func setWindowPosFast(hwnd uintptr, x, y, width, height int) {
 	)
 }
 
-// SubclassParentWindow hooks the parent window's native Win32 WM_SIZE messages
-// so embedded child sessions resize synchronously at 60fps as the user drags
-// the window borders.
+// SubclassParentWindow hooks the parent window's native Win32 WM_SIZE messages.
+// NOTE: SetWindowSubclass currently returns 0 (failure) on this window, so this
+// has never installed and ResizeChildren never ran from it; live resizing is
+// driven by the frontend's JS resize path instead (see docs/architecture.md).
+// Kept as-is so a future fix (SetWindowLongPtr window proc replacement) can
+// restore frame-accurate resizing without changes here.
 func SubclassParentWindow(hwnd uintptr, h *Host) {
 	if hwnd == 0 {
 		return
@@ -545,5 +548,6 @@ func SubclassParentWindow(hwnd uintptr, h *Host) {
 		subclassProc = syscall.NewCallback(parentWindowSubclassProc)
 	})
 	const subclassID = 0x57415353 // "WASS"
-	procSetWindowSubclass.Call(hwnd, subclassProc, subclassID, 0)
+	ret, _, err := procSetWindowSubclass.Call(hwnd, subclassProc, subclassID, 0)
+	log.Printf("webview2: SetWindowSubclass(hwnd=%d) -> ret=%d err=%v", hwnd, ret, err)
 }
