@@ -35,6 +35,10 @@ type AppConfig struct {
 	ActiveAccountID string       `json:"activeAccountId,omitempty"`
 	CloseToTray     bool         `json:"closeToTray"`
 	WindowState     *WindowState `json:"windowState,omitempty"`
+	// AutoUpdate is opt-in: the app never downloads anything unless the user enables it.
+	AutoUpdate bool `json:"autoUpdate"`
+	// UpdateChannel is "stable" (default) or "nightly".
+	UpdateChannel string `json:"updateChannel,omitempty"`
 }
 
 // Store defines access to application configuration.
@@ -47,6 +51,10 @@ type Store interface {
 	GetCloseToTray() (bool, error)
 	SetWindowState(state WindowState) error
 	GetWindowState() (*WindowState, error)
+	SetAutoUpdate(enabled bool) error
+	GetAutoUpdate() (bool, error)
+	SetUpdateChannel(channel string) error
+	GetUpdateChannel() (string, error)
 }
 
 // JSONStore is a thread-safe, atomic file-backed configuration store.
@@ -181,6 +189,53 @@ func (s *JSONStore) GetCloseToTray() (bool, error) {
 		return false, err
 	}
 	return cfg.CloseToTray, nil
+}
+
+// UpdateChannels are the update channels the app understands.
+const (
+	UpdateChannelStable  = "stable"
+	UpdateChannelNightly = "nightly"
+)
+
+// IsUpdateChannel reports whether ch is a known update channel.
+func IsUpdateChannel(ch string) bool {
+	return ch == UpdateChannelStable || ch == UpdateChannelNightly
+}
+
+// SetAutoUpdate updates and persists the auto-update preference. It is off by default.
+func (s *JSONStore) SetAutoUpdate(enabled bool) error {
+	return s.update(func(cfg *AppConfig) { cfg.AutoUpdate = enabled })
+}
+
+// GetAutoUpdate loads and returns the auto-update preference.
+func (s *JSONStore) GetAutoUpdate() (bool, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return false, err
+	}
+	return cfg.AutoUpdate, nil
+}
+
+// SetUpdateChannel updates and persists the update channel. Only "stable" and
+// "nightly" are accepted; anything else returns an error and persists nothing.
+func (s *JSONStore) SetUpdateChannel(channel string) error {
+	if !IsUpdateChannel(channel) {
+		return fmt.Errorf("config: unknown update channel %q (want stable or nightly)", channel)
+	}
+	return s.update(func(cfg *AppConfig) { cfg.UpdateChannel = channel })
+}
+
+// GetUpdateChannel loads and returns the update channel. A missing value
+// defaults to "stable".
+func (s *JSONStore) GetUpdateChannel() (string, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return "", err
+	}
+	if cfg.UpdateChannel == "" {
+		return UpdateChannelStable, nil
+	}
+	return cfg.UpdateChannel, nil
 }
 
 // SetWindowState persists the main window geometry.
