@@ -82,6 +82,16 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Package directory assets (macOS .app)
+        run: |
+          cd artifacts
+          if [ -d "wassap-desktop.app" ]; then
+            mv wassap-desktop.app wassap-desktop-darwin-universal.app
+            zip -r wassap-desktop-darwin-universal.app.zip wassap-desktop-darwin-universal.app
+            rm -rf wassap-desktop-darwin-universal.app
+          fi
+          ls -la
+
       - name: Publish pre-release (main)
         if: github.ref == 'refs/heads/main'
         env:
