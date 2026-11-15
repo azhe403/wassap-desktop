@@ -54,6 +54,17 @@ Run `wails dev` for live hot-reloading during development.
 wails build
 ```
 
+## Updating
+
+Wassap Desktop can check the [GitHub Releases](https://github.com/azhe403/wassap-desktop/releases) page for newer builds and apply them in place — no reinstall needed.
+
+- **Auto-update is OFF by default.** Nothing is downloaded unless you turn it on in **Settings → Software Update** when you want it.
+- **Channels:** `Stable` (default) follows tagged releases (`v*`); `Nightly` follows `main` and may break things. Switching channels never downgrades the app — an update is offered only when the channel's build contains commits your running build does not.
+- **Applying an update:** when a newer build is found, enable **Auto-update** (or click **Update**), then click **Restart to update** when it has downloaded. The app swaps the binary and relaunches itself. Until you click, nothing changes.
+- **Windows only.** Linux/macOS report "not supported" for now.
+- **Versions ≤ v0.1.0 have no updater** and don't know about this feature; their first update is a manual download from the Releases page. Every release after that can update itself.
+- Development builds (no version stamp) disable the updater entirely.
+
 ## Testing
 
 ```bash
