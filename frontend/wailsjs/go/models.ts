@@ -188,6 +188,50 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class UpdateStatus {
+	    state: string;
+	    channel: string;
+	    currentVersion: string;
+	    latestVersion: string;
+	    releaseURL: string;
+	    message?: string;
+	    checkedAt?: string;
+	    progressDone?: number;
+	    progressTotal?: number;
+	    dismissed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.channel = source["channel"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseURL = source["releaseURL"];
+	        this.message = source["message"];
+	        this.checkedAt = source["checkedAt"];
+	        this.progressDone = source["progressDone"];
+	        this.progressTotal = source["progressTotal"];
+	        this.dismissed = source["dismissed"];
+	    }
+	}
+	export class VersionInfo {
+	    version: string;
+	    commit: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VersionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.commit = source["commit"];
+	    }
+	}
 
 }
 

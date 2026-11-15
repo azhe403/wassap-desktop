@@ -15,6 +15,7 @@ const (
 	StateAvailable   State = "available"
 	StateUnsupported State = "unsupported"
 	StateError       State = "error"
+	StateUnknown     State = "unknown"
 )
 
 // Status is what the UI needs to decide what to show. It is JSON-marshaled
@@ -127,6 +128,27 @@ func (c *Checker) Check(ctx context.Context, p Prefs, force bool) (Status, error
 }
 
 func (c *Checker) cache() *Cache { return &Cache{Path: c.cachePath} }
+
+// Snapshot reads the cached status without touching the network. Before the
+// first check completes it reports StateUnknown. Used to give the UI an
+// initial paint without waiting for a check result.
+func (c *Checker) Snapshot() Status {
+	cached, err := c.cache().Load()
+	if err != nil {
+		cached = UpdateCheckCache{}
+	}
+	empty := cached.LastAttempt.IsZero() && cached.CheckedAt.IsZero() &&
+		cached.LastError == "" && cached.CurrentVersion == "" && cached.Channel == ""
+	if empty {
+		return Status{State: StateUnknown, Channel: "stable", CurrentVersion: c.version}
+	}
+	st := statusFromCache(cached)
+	st.CurrentVersion = c.version
+	if st.Channel == "" {
+		st.Channel = "stable"
+	}
+	return st
+}
 
 // fresh reports whether the last attempt is recent enough to skip the network.
 func fresh(c UpdateCheckCache, now time.Time) bool {

@@ -15,6 +15,7 @@ import (
 	"wassap-desktop/internal/browser"
 	"wassap-desktop/internal/config"
 	"wassap-desktop/internal/storage"
+	"wassap-desktop/internal/updater"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -63,6 +64,12 @@ type App struct {
 	statsLastAt    time.Time
 
 	tray trayBackend
+
+	checker    *updater.Checker
+	downloader *updater.Downloader
+	updateMu   sync.Mutex
+	dlState    dlDownloadState
+	lastStatus updater.Status
 }
 
 // trayBackend is the platform tray implementation. On Windows it is a real
@@ -117,6 +124,16 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	}
 	app.tray = newTrayBackend(app)
 	app.wirePlatformNotifications()
+
+	// Auto updater: passive and fail-soft until the user opts in. The
+	// checker never touches the network until startup's kick fires.
+	updatesDir := filepath.Join(dirs.Cache, "updates")
+	if err := os.MkdirAll(updatesDir, 0o700); err != nil {
+		log.Printf("updater: cannot create updates dir: %v", err)
+	}
+	app.checker = updater.NewChecker(updater.NewClient(), filepath.Join(dirs.Cache, "update-check.json"), version, commit)
+	app.downloader = updater.NewDownloader(updatesDir)
+	app.lastStatus = app.checker.Snapshot()
 
 	// Restore active account from config on startup
 	if accountSvc != nil {
@@ -551,6 +568,9 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
 	a.mu.Unlock()
+	// Auto updater runs in the background; it never blocks startup and never
+	// downloads anything without the user opting in.
+	go a.updateOnStartup(ctx)
 	// Position restore happens in the geometry polling loop (windowgeom_*.go):
 	// the window may not be visible yet when OnStartup runs, and the loop
 	// applies the saved position once the window is observable.
