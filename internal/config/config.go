@@ -15,10 +15,26 @@ import (
 // ErrCorruptConfig indicates the configuration file exists but cannot be parsed.
 var ErrCorruptConfig = errors.New("config: file is corrupt")
 
+// WindowState records the last known geometry of the main window so it can be
+// restored on the next launch. It is nil until the window has been moved,
+// resized or closed at least once.
+//
+// Units are deliberately asymmetric by platform convention: X/Y are raw
+// screen pixels (the argument SetWindowPos takes), Width/Height are logical
+// 96-DPI pixels (the unit Wails window options and WindowGetSize use).
+type WindowState struct {
+	X         int  `json:"x"`
+	Y         int  `json:"y"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
+	Maximised bool `json:"maximised"`
+}
+
 // AppConfig represents persisted application configuration.
 type AppConfig struct {
-	ActiveAccountID string `json:"activeAccountId,omitempty"`
-	CloseToTray     bool   `json:"closeToTray"`
+	ActiveAccountID string       `json:"activeAccountId,omitempty"`
+	CloseToTray     bool         `json:"closeToTray"`
+	WindowState     *WindowState `json:"windowState,omitempty"`
 }
 
 // Store defines access to application configuration.
@@ -29,6 +45,8 @@ type Store interface {
 	GetActiveAccount() (string, error)
 	SetCloseToTray(enabled bool) error
 	GetCloseToTray() (bool, error)
+	SetWindowState(state WindowState) error
+	GetWindowState() (*WindowState, error)
 }
 
 // JSONStore is a thread-safe, atomic file-backed configuration store.
@@ -163,4 +181,19 @@ func (s *JSONStore) GetCloseToTray() (bool, error) {
 		return false, err
 	}
 	return cfg.CloseToTray, nil
+}
+
+// SetWindowState persists the main window geometry.
+func (s *JSONStore) SetWindowState(state WindowState) error {
+	return s.update(func(cfg *AppConfig) { cfg.WindowState = &state })
+}
+
+// GetWindowState loads and returns the last persisted window geometry. It
+// returns (nil, nil) when no state has been saved yet.
+func (s *JSONStore) GetWindowState() (*WindowState, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	return cfg.WindowState, nil
 }

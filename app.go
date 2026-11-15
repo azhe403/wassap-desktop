@@ -51,6 +51,13 @@ type App struct {
 	closeToTray    bool
 	forceQuit      bool
 
+	windowState *config.WindowState
+
+	geomPending *config.WindowState
+	geomTimer   *time.Timer
+	geomStop    chan struct{}
+	geomDone    chan struct{}
+
 	statsMu        sync.Mutex
 	statsLastTicks map[uint32]uint64
 	statsLastAt    time.Time
@@ -101,6 +108,12 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 		accountSvc:  accountSvc,
 		configStore: cfgStore,
 		closeToTray: closeToTray,
+	}
+	windowState, wsErr := cfgStore.GetWindowState()
+	if wsErr != nil {
+		log.Printf("app: cannot load window state, starting with defaults: %v", wsErr)
+	} else {
+		app.windowState = windowState
 	}
 	app.tray = newTrayBackend(app)
 	app.wirePlatformNotifications()
@@ -327,6 +340,60 @@ func (a *App) SetCloseToTray(enabled bool) error {
 	return nil
 }
 
+// noteWindowGeometry records the latest known window geometry and persists it
+// after a short quiet period, so dragging or resizing the window does not
+// hammer the config file. Called from the geometry polling loop
+// (windowgeom_windows.go) whenever the sampled geometry changes.
+func (a *App) noteWindowGeometry(x, y, w, h int, maximised bool) {
+	a.mu.Lock()
+	a.geomPending = &config.WindowState{X: x, Y: y, Width: w, Height: h, Maximised: maximised}
+	if a.geomTimer != nil {
+		a.geomTimer.Stop()
+	}
+	a.geomTimer = time.AfterFunc(400*time.Millisecond, a.flushWindowGeometry)
+	a.mu.Unlock()
+}
+
+// flushWindowGeometry writes the pending window geometry to the config store.
+// When the window is maximised only the maximised flag is updated and the last
+// known normal bounds are kept, so un-maximising returns the user to the size
+// they actually had instead of the maximised rectangle.
+func (a *App) flushWindowGeometry() {
+	a.mu.Lock()
+	p := a.geomPending
+	a.geomPending = nil
+	if a.geomTimer != nil {
+		a.geomTimer.Stop()
+		a.geomTimer = nil
+	}
+	a.mu.Unlock()
+
+	if p == nil || a.configStore == nil {
+		return
+	}
+	if p.Maximised {
+		cur, err := a.configStore.GetWindowState()
+		if err != nil {
+			// Read failure: persist the maximised geometry anyway so the
+			// flag is not silently dropped.
+			log.Printf("app: cannot load stored window state (%v); storing maximised bounds as-is", err)
+		} else if cur != nil {
+			// Keep the last known normal bounds so un-maximising returns
+			// the user to the size they actually had.
+			p.X, p.Y, p.Width, p.Height = cur.X, cur.Y, cur.Width, cur.Height
+		} else {
+			// First-ever save of a maximised window: persist as-is; without
+			// stored bounds there is no normal geometry to preserve yet.
+			log.Printf("app: no normal bounds on file; storing maximised geometry as-is")
+		}
+	}
+	if err := a.configStore.SetWindowState(*p); err != nil {
+		log.Printf("app: cannot persist window geometry: %v", err)
+	} else {
+		log.Printf("app: window geometry saved (x=%d y=%d %dx%d maximised=%v)", p.X, p.Y, p.Width, p.Height, p.Maximised)
+	}
+}
+
 // onBeforeClose is called by Wails before closing the main window.
 // If close-to-tray is enabled and the tray icon is actually registered (and
 // the exit was not forced via tray "Quit"), it hides the window and prevents
@@ -453,12 +520,31 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
 	a.mu.Unlock()
+	// Position restore happens in the geometry polling loop (windowgeom_*.go):
+	// the window may not be visible yet when OnStartup runs, and the loop
+	// applies the saved position once the window is observable.
 }
 
 // shutdown is called when the app is closing. It tears down the system tray
 // and flushes all browser sessions.
 func (a *App) shutdown(ctx context.Context) {
 	log.Printf("shutdown: start")
+	a.mu.Lock()
+	if a.geomStop != nil {
+		close(a.geomStop)
+		done := a.geomDone
+		a.geomStop = nil
+		a.geomDone = nil
+		a.mu.Unlock()
+		// Wait for the polling goroutine to exit before the final flush, so a
+		// pending geometry write cannot be armed after shutdown proceeds.
+		if done != nil {
+			<-done
+		}
+	} else {
+		a.mu.Unlock()
+	}
+	a.flushWindowGeometry()
 	if a.tray != nil {
 		a.tray.Remove()
 		log.Printf("shutdown: tray removed")
@@ -472,6 +558,11 @@ func (a *App) shutdown(ctx context.Context) {
 func (a *App) domReady(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
+	if a.geomStop == nil {
+		a.geomStop = make(chan struct{})
+		a.geomDone = make(chan struct{})
+		startGeometryPolling(a.geomStop, a.geomDone, a.noteWindowGeometry, a.windowState)
+	}
 	a.mu.Unlock()
 	a.attachMainWindow()
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"wassap-desktop/internal/appdirs"
+	"wassap-desktop/internal/config"
 )
 
 //go:embed all:frontend/dist
@@ -69,6 +70,24 @@ func main() {
 		width = 1280
 		height = 800
 	}
+	// Restore the saved window geometry: size (in Wails' logical 96-DPI
+	// pixels) and the maximised state go through the window options before
+	// creation; the position is applied from the geometry polling loop
+	// (windowgeom_*.go) once the window is observable. App builds its own
+	// config store; reading here must happen before wails.Run, and reads
+	// are cheap.
+	startState := options.Normal
+	cfgStore := config.NewStore(filepath.Join(dirs.Config, "config.json"))
+	if winState, wsErr := cfgStore.GetWindowState(); wsErr != nil {
+		log.Printf("config: cannot load window state, using defaults: %v", wsErr)
+	} else if winState != nil {
+		if winState.Width >= 480 && winState.Height >= 400 {
+			width, height = winState.Width, winState.Height
+		}
+		if winState.Maximised {
+			startState = options.Maximised
+		}
+	}
 
 	err = wails.Run(&options.App{
 		Title:            title,
@@ -76,6 +95,7 @@ func main() {
 		Height:           height,
 		MinWidth:         480,
 		MinHeight:        400,
+		WindowStartState: startState,
 		BackgroundColour: &options.RGBA{R: 11, G: 20, B: 26, A: 255},
 		AssetServer:      assetOpts,
 		OnStartup:        app.startup,
