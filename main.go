@@ -21,6 +21,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// version and commit are stamped at build time via -ldflags "-X main.version=... -X main.commit=...".
+// A development build (no stamp) reports version "dev"; the auto updater never acts on it.
+var version = "dev"
+var commit = ""
+
 // shellUserDataPath returns a fresh user data folder for the Wails shell.
 // WebView2 refuses to create a controller for a user data folder that is
 // already in use, so a leftover engine process from a crashed run would break
@@ -32,6 +37,17 @@ func shellUserDataPath(dirs appdirs.Dirs) string {
 }
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-v" {
+			if commit == "" {
+				fmt.Printf("wassap-desktop %s (dev)\n", version)
+			} else {
+				fmt.Printf("wassap-desktop %s (%s)\n", version, commit)
+			}
+			os.Exit(0)
+		}
+	}
+
 	legacyFlag := flag.Bool("pecut1", false, "run in Pecut 1 legacy mode (single direct WhatsApp session)")
 	flag.Parse()
 
