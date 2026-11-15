@@ -7,6 +7,103 @@ import (
 	"time"
 )
 
+func TestRestoreExe(t *testing.T) {
+	t.Run("single candidate restored", func(t *testing.T) {
+		dir := t.TempDir()
+		old := filepath.Join(dir, "app.exe.old-123")
+		if err := os.WriteFile(old, []byte("original"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		exe := filepath.Join(dir, "app.exe")
+		restored, err := RestoreExe(exe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !restored {
+			t.Fatal("expected restored=true")
+		}
+		got, err := os.ReadFile(exe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "original" {
+			t.Errorf("restored content = %q", got)
+		}
+	})
+
+	t.Run("newest of several candidates is restored", func(t *testing.T) {
+		dir := t.TempDir()
+		older := filepath.Join(dir, "app.exe.old-111")
+		newer := filepath.Join(dir, "app.exe.old-222")
+		if err := os.WriteFile(older, []byte("old-binary"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(newer, []byte("new-binary"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now()
+		_ = os.Chtimes(older, now.Add(-2*time.Hour), now.Add(-2*time.Hour))
+		_ = os.Chtimes(newer, now, now)
+		exe := filepath.Join(dir, "app.exe")
+		restored, err := RestoreExe(exe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !restored {
+			t.Fatal("expected restored=true")
+		}
+		got, err := os.ReadFile(exe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "new-binary" {
+			t.Errorf("must restore the newest candidate, got %q", got)
+		}
+	})
+
+	t.Run("exe present means no-op", func(t *testing.T) {
+		dir := t.TempDir()
+		exe := filepath.Join(dir, "app.exe")
+		if err := os.WriteFile(exe, []byte("current"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		restored, err := RestoreExe(exe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if restored {
+			t.Error("no restore needed when the exe is present")
+		}
+	})
+
+	t.Run("no candidates means no restore", func(t *testing.T) {
+		dir := t.TempDir()
+		restored, err := RestoreExe(filepath.Join(dir, "app.exe"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if restored {
+			t.Error("nothing to restore must not report restored")
+		}
+	})
+
+	t.Run("non-matching siblings are ignored", func(t *testing.T) {
+		dir := t.TempDir()
+		for _, name := range []string{"other.exe.old-1", "app.exe.bak", "app.exe.old-", "app.exe.old-12x"} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("keep"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		restored, err := RestoreExe(filepath.Join(dir, "app.exe"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if restored {
+			t.Error("non-matching files must not be restored")
+		}
+	})
+}
+
 func TestSweepRestoresMissingExeFromOld(t *testing.T) {
 	dir := t.TempDir()
 	old := filepath.Join(dir, "app.exe.old-1234")

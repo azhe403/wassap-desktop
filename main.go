@@ -18,6 +18,7 @@ import (
 
 	"wassap-desktop/internal/appdirs"
 	"wassap-desktop/internal/config"
+	"wassap-desktop/internal/updater"
 )
 
 //go:embed all:frontend/dist
@@ -58,7 +59,26 @@ func main() {
 		if pid, convErr := strconv.Atoi(os.Args[2]); convErr == nil {
 			if waitErr := waitForPID(pid); waitErr == nil {
 				if exe, exeErr := os.Executable(); exeErr == nil {
-					_ = exec.Command(exe).Start()
+					// Crash/power-loss between the apply renames leaves the exe
+					// missing. The relauncher is the one process alive in that
+					// window; restore the .old-* sibling before starting.
+					if _, statErr := os.Stat(exe); os.IsNotExist(statErr) {
+						restored, restoreErr := updater.RestoreExe(exe)
+						switch {
+						case restoreErr != nil:
+							log.Printf("relaunch: restore of missing exe failed: %v", restoreErr)
+							os.Exit(1)
+						case !restored:
+							log.Printf("relaunch: exe %s is missing and no .old-* sibling exists to restore", exe)
+							os.Exit(1)
+						default:
+							log.Printf("relaunch: restored missing exe from .old-* before launch")
+						}
+					}
+					if startErr := exec.Command(exe).Start(); startErr != nil {
+						log.Printf("relaunch: cannot start %s: %v", exe, startErr)
+						os.Exit(1)
+					}
 				}
 			} else {
 				log.Printf("relaunch: %v", waitErr)

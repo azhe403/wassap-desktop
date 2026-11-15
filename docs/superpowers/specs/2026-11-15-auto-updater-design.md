@@ -1,7 +1,7 @@
 # Wassap Desktop Auto Updater — Design
 
 **Date:** 2026-11-15
-**Status:** Approved by user 2026-11-15 ("gas")
+**Status:** Approved by user 2026-11-15 ("gas"). Implemented on main 2026-11-15; updated after the final review: the crash recovery moved into the relauncher (restore-before-start), because the startup sweep alone could never run with the missing exe.
 **Scope:** CI release workflow (version stamping), `internal/updater` (new package), `internal/config` (new fields), `app.go` (bindings + startup hook), frontend Settings/About + update notice, `main.go` (startup sweep)
 
 ---
@@ -136,9 +136,9 @@ About view replaces the hardcoded `v0.4.0` with a new binding `GetVersion()` ret
 - **Download** (`download.go`): streams to `~/.cache/wassap-desktop/updates/<asset>.part` then renames to `<asset>`. Verifies SHA-256 against the GitHub asset `digest` field (`sha256:<hex>`) when present; mismatch → delete, hard error. Absent digest → log warning, proceed (HTTPS from the official repo is the transport trust anchor). Checks free disk space first via `golang.org/x/sys/windows.GetDiskFreeSpaceEx` when on Windows; refusal below 2× the asset size. (x/sys is already an indirect dep; promote to direct if needed.)
 - **Apply** (`apply_windows.go`, `apply_other.go`): three phases, all inside the running binary.
   1. **Pre-stage**: copy the staged file to `<exedir>/<name>.new-<pid>` (same directory, same volume) and re-verify its SHA-256. The old exe stays intact and running throughout.
-  2. **Relaunch**: spawn `<exe> --relaunch-after-update <own pid>` detached. The relauncher is the same binary in a hidden mode (no new project, no new artifact): it waits for the parent process to exit fully (`OpenProcess(SYNCHRONIZE)` + `WaitForSingleObject`), then starts `<exe>` with no arguments and exits. Waiting for full process exit — not just for swap start — means the WebView2 teardown in `OnShutdown` has completed and the new instance opens the profiles after the old one released them.
+  2. **Relaunch**: spawn `<exe> --relaunch-after-update <own pid>` detached. The relauncher is the same binary in a hidden mode (no new project, no new artifact): it waits for the parent process to exit fully (`OpenProcess(SYNCHRONIZE)` + `WaitForSingleObject`), then **restores the sibling `.old-*` back to `<exe>` when — and only when — `<exe>` is missing** (the crash window between the swap renames, where no other process could fix it), then starts `<exe>` with no arguments and exits. Waiting for full process exit — not just for swap start — means the WebView2 teardown in `OnShutdown` has completed and the new instance opens the profiles after the old one released them.
   3. **Swap**: `os.Rename(exe, exe.old-<pid>)` then `os.Rename(<name>.new-<pid>, exe)` — two renames, no copy between them, so the exe is missing only for the nanoseconds between two metadata operations. On failure of the first rename: delete `.new-*`, return the error, app keeps running. On failure of the second: rename `.old-*` back. Then force-quit via the existing `forceQuit`/`quitApp` path, which bypasses the close-to-tray veto in `onBeforeClose`.
-- **Sweep** (`sweep.go`): on startup, (a) if `<exedir>/<name>` is missing and exactly one `<name>.old-*` exists next to it, rename it back (crash between the two apply renames) — log a warning; (b) otherwise remove `<name>.old-*` older than 1 hour. Best-effort, errors logged and ignored.
+- **Sweep** (`sweep.go`): on startup, `RestoreExe` runs first — if `<exedir>/<name>` is missing and `<name>.old-*` siblings exist, the newest is renamed back (crash windows no live process can cover; in practice the relauncher handles the swap-crash case, the sweep covers externally deleted executables). Then it removes `<name>.old-*` older than 1 hour. Best-effort, errors logged and ignored.
 - **Relauncher** (`relaunch_other.go` handles non-Windows as no-op/unsupported): `main.go` checks `--relaunch-after-update <pid>` before doing anything else. When set, it waits for `<pid>` to exit (`OpenProcess(SYNCHRONIZE)` + `WaitForSingleObject`, capped at 60s), starts `os.Executable()` with no args, and exits — it never reaches `wails.Run` and never touches the single-instance lock, sidestepping the Wails mutex race entirely.
 
 ### 7.2 Config (`internal/config`)
@@ -198,7 +198,7 @@ wails build ... -ldflags "-X main.version=${VER} -X main.commit=${GITHUB_SHA}"
 **Check (automatic, throttled)** → cache write → `EventsEmit(update:status)` → Settings status row + sidebar badge re-render.
 **Auto-update ON**: `available` → checker starts `DownloadUpdate` itself → `downloading` (progress ticks every ~256 KiB or 250 ms) → `downloaded` → Settings row offers "Restart to update", badge stays on.
 **Auto-update OFF**: `available` → Settings row offers [Update] [Dismiss]; nothing downloads until user clicks.
-**Apply**: `RestartToApplyUpdate` → pre-stage `.new-<pid>` (copy + verify) → spawn relauncher → two-rename swap → `forceQuit` → parent exits after WebView2 teardown → relauncher observes full process death → starts `<exe>` (new version, no args) → new instance acquires the single-instance lock with zero contention.
+**Apply**: `RestartToApplyUpdate` → pre-stage `.new-<pid>` (copy + verify) → spawn relauncher → two-rename swap → `forceQuit` → parent exits after WebView2 teardown → relauncher observes full process death → if `<exe>` is missing, restores the `.old-*` sibling → starts `<exe>` (new version, no args) → new instance acquires the single-instance lock with zero contention.
 **Bootstrap**: builds ≤ v0.1.0 have no updater — their first update is manual via the Releases page. README gains an "Updating" section stating this once.
 
 ## 9. Failure modes & mitigations
@@ -208,7 +208,7 @@ wails build ... -ldflags "-X main.version=${VER} -X main.commit=${GITHUB_SHA}"
 | No network / GitHub 403/429 | Last cached status served; nothing surfaced as an error dialog; retry ≥ 1h |
 | Corrupt cache / missing digest | Cache → "unknown"; digest absent → warning + proceed; digest mismatch → hard fail, file deleted |
 | Exe folder not writable (e.g. Program Files) | Swap fails cleanly, error names the cause and the Releases fallback; app keeps running |
-| Crash mid-apply | The missing-exe case is closed: startup sweep renames the matching `.old-*` back if `<name>` is absent. Between the two renames no file copy happens, so the window is nanoseconds and always recoverable on next launch |
+| Crash mid-apply | Between the two swap renames the exe can be missing while `.old-<pid>` and `.new-<pid>` exist. The relauncher — the only process alive in that window — restores the newest `.old-*` back to `<exe>` before starting it (§7.1). The startup sweep covers the same restore plus stale cleanup (§7.1). Both are unit-tested. |
 | New binary is broken | Same exposure as the raw-download path; `update-check.json` records what was applied; user reinstalls from Releases |
 | Two updates race | Pre-stage + atomic rename swap; a second click sees either `downloaded` (no-op) or an in-progress state; single-instance lock serializes app instances |
 | Nightly freshness compare diverges after force-push | `ahead_by > 0` may stay true; acceptable, user can always switch channel |
@@ -217,7 +217,7 @@ wails build ... -ldflags "-X main.version=${VER} -X main.commit=${GITHUB_SHA}"
 ## 10. Testing
 
 Go unit tests (`internal/updater/*_test.go`, package `updater`):
-- Apply: pre-stage copy → verify → two-rename swap → rollback paths (first-rename failure cleans `.new-*`; second-rename failure restores `.old-*`). Sweep: restore-if-exe-missing + `.old-*` cleanup.
+- Apply: pre-stage copy → verify → two-rename swap → rollback paths (first-rename failure cleans `.new-*`; second-rename failure restores `.old-*`). `RestoreExe`: restore-if-exe-missing (newest of several), restore consumed, presence no-op, non-matching names ignored. Sweep: stale `.old-*` cleanup delegated to `RestoreExe`.
 - Relauncher: `--relaunch-after-update <pid>` waits for exit, spawns new exe, never reaches `wails.Run`. Tested with a real child process.
 - Channel selection: ahead-only gate for stable and nightly; a running nightly whose history contains the stable tag must NOT offer that tag; ahead of main offers nightly; dev build short-circuits.
 - Throttle: fresh cache → no HTTP call; stale/forced (`CheckNow`) → HTTP call; corrupt cache → unknown, no panic.

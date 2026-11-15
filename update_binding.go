@@ -19,14 +19,17 @@ import (
 
 // dlDownloadState is the in-memory download lifecycle, kept separately from
 // the checker's status: the checker owns "is there an update", this owns
-// "are we fetching it / is it staged".
+// "are we fetching it / is it staged". StagedVersion binds the staged file
+// to the release identity it was downloaded from; a later check resolving a
+// different identity invalidates it.
 type dlDownloadState struct {
-	State      string // idle | downloading | downloaded | error
-	Done       int64
-	Total      int64
-	StagedPath string
-	StagedSHA  string
-	Message    string
+	State         string // idle | downloading | downloaded | error
+	Done          int64
+	Total         int64
+	StagedPath    string
+	StagedSHA     string
+	StagedVersion string
+	Message       string
 }
 
 // VersionInfo is what the About view shows.
@@ -176,10 +179,10 @@ func (a *App) SetUpdateChannel(channel string) error {
 	if err := a.configStore.SetUpdateChannel(channel); err != nil {
 		return err
 	}
-	// A channel switch re-checks on the next opportunity; do it now so the
-	// status row is honest, but never block on the network.
+	// A channel switch is an explicit user action: bypass the throttle so the
+	// status row reflects the newly selected channel now, not in 12h.
 	if channel != prev {
-		go a.updateCheck(context.Background(), false)
+		go a.updateCheck(context.Background(), true)
 	}
 	return nil
 }
@@ -303,6 +306,19 @@ func (a *App) updateCheck(ctx context.Context, force bool) UpdateStatus {
 		// Checker never returns an error today; treat as a no-op.
 		return a.currentUpdateStatus()
 	}
+	// I-1: a fresher check that resolved a different latest version must
+	// invalidate a previously staged download — otherwise "Restart to update"
+	// announces the new build while installing the old one.
+	a.updateMu.Lock()
+	resetDL, reset := resetDownloadStateIfStale(a.dlState, st.LatestVersion)
+	oldPath := a.dlState.StagedPath
+	a.dlState = resetDL
+	a.updateMu.Unlock()
+	if reset && oldPath != "" {
+		if err := os.Remove(oldPath); err != nil {
+			log.Printf("updater: cannot remove superseded staged file %s: %v", oldPath, err)
+		}
+	}
 	a.setLastStatus(st)
 	a.emitUpdateStatus()
 	if shouldAutoDownload(prefs.AutoUpdate, st) {
@@ -347,12 +363,13 @@ func (a *App) startDownload() {
 		log.Printf("updater: no asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 		return
 	}
+	stagedVersion := a.lastStatusSnapshot().LatestVersion
 
-	a.setDLState(dlDownloadState{State: "downloading"})
+	a.setDLState(dlDownloadState{State: "downloading", StagedVersion: stagedVersion})
 	a.emitUpdateStatus()
 
 	res, err := a.downloader.Download(context.Background(), asset, func(done, total int64) {
-		a.setDLState(dlDownloadState{State: "downloading", Done: done, Total: total})
+		a.setDLState(dlDownloadState{State: "downloading", Done: done, Total: total, StagedVersion: stagedVersion})
 		a.emitUpdateStatus()
 	})
 	if err != nil {
@@ -378,7 +395,7 @@ func (a *App) startDownload() {
 	if info, err := os.Stat(res.Path); err == nil {
 		done = info.Size()
 	}
-	a.setDLState(dlDownloadState{State: "downloaded", Done: done, Total: done, StagedPath: res.Path, StagedSHA: res.SHA256})
+	a.setDLState(dlDownloadState{State: "downloaded", Done: done, Total: done, StagedPath: res.Path, StagedSHA: res.SHA256, StagedVersion: stagedVersion})
 	a.emitUpdateStatus()
 }
 
