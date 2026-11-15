@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -46,6 +48,23 @@ func main() {
 			}
 			os.Exit(0)
 		}
+	}
+
+	// Internal relaunch helper used by the updater: wait for the previous
+	// process to exit fully, then start the new binary with no arguments.
+	// It never reaches wails.Run and never touches the single-instance lock.
+	// (Runs before flag.Parse: Go's flag package would reject this flag.)
+	if len(os.Args) == 3 && os.Args[1] == "--relaunch-after-update" {
+		if pid, convErr := strconv.Atoi(os.Args[2]); convErr == nil {
+			if waitErr := waitForPID(pid); waitErr == nil {
+				if exe, exeErr := os.Executable(); exeErr == nil {
+					_ = exec.Command(exe).Start()
+				}
+			} else {
+				log.Printf("relaunch: %v", waitErr)
+			}
+		}
+		os.Exit(0)
 	}
 
 	legacyFlag := flag.Bool("pecut1", false, "run in Pecut 1 legacy mode (single direct WhatsApp session)")
