@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"wassap-desktop/internal/appdirs"
 	"wassap-desktop/internal/browser"
 	"wassap-desktop/internal/config"
+	"wassap-desktop/internal/privacyblur"
 	"wassap-desktop/internal/storage"
 	"wassap-desktop/internal/updater"
 
@@ -31,6 +33,8 @@ type HostController interface {
 	UpdateBounds(width, height int) error
 	SetVisible(visible bool) error
 	SetActiveSession(id browser.ProfileID)
+	EvalAll(script string)
+	SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
 }
 
 // App is the desktop shell application and Wails binding target.
@@ -125,6 +129,17 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	app.tray = newTrayBackend(app)
 	app.wirePlatformNotifications()
 
+	// Privacy blur: install the delegate before any session can be opened.
+	// The prelude closure re-reads config.json at each call so sessions
+	// created later see current settings, not the startup snapshot.
+	if app.host != nil {
+		app.host.SetPrivacyDelegate(
+			func() string { return privacyblur.PreludeScript(mustJSON(app.effectivePrivacyBlur())) },
+			func() string { return privacyblur.ApplyScript(mustJSON(app.effectivePrivacyBlur())) },
+			app.handlePrivacyBlurWrite,
+		)
+	}
+
 	// Auto updater: passive and fail-soft until the user opts in. The
 	// checker never touches the network until startup's kick fires.
 	updatesDir := filepath.Join(dirs.Cache, "updates")
@@ -158,6 +173,73 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	}
 
 	return app
+}
+
+// mustJSON marshals v with encoding/json, which also escapes <, > and &, so
+// the output is safe to embed in a one-line JavaScript assignment.
+func mustJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(fmt.Sprintf("privacy blur: cannot marshal settings: %v", err))
+	}
+	return string(b)
+}
+
+// effectivePrivacyBlur reads the section from config.json on every call and
+// returns the effective settings (defaults filled when never written).
+func (a *App) effectivePrivacyBlur() config.PrivacyBlurConfig {
+	got, err := a.configStore.GetPrivacyBlurSettings()
+	if err != nil || got == nil {
+		return config.DefaultPrivacyBlurConfig()
+	}
+	return config.NormalizePrivacyBlurConfig(*got)
+}
+
+// handlePrivacyBlurWrite merges a page-originated patch (e.g. the engine's
+// Alt+/ handler) into the stored settings under the store's lock, re-broadcasts
+// the merged object to every open session, and emits privacy-blur:changed.
+func (a *App) handlePrivacyBlurWrite(values map[string]any) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("privacy blur: write hook panicked: %v", r)
+		}
+	}()
+	merged, err := a.configStore.MergePrivacyBlurSettings(values)
+	if err != nil {
+		log.Printf("privacy blur: merge failed: %v", err)
+		return
+	}
+	cfg := config.NormalizePrivacyBlurConfig(*merged)
+	if a.host != nil {
+		a.host.EvalAll(privacyblur.ApplyScript(mustJSON(cfg)))
+	}
+	a.emitPrivacyBlurChanged(cfg)
+}
+
+func (a *App) emitPrivacyBlurChanged(cfg config.PrivacyBlurConfig) {
+	if a.ctx == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, "privacy-blur:changed", cfg)
+}
+
+// GetPrivacyBlurSettings returns the effective privacy blur settings.
+func (a *App) GetPrivacyBlurSettings() config.PrivacyBlurConfig {
+	return a.effectivePrivacyBlur()
+}
+
+// SetPrivacyBlurSettings replaces the whole privacy blur section, persists
+// it, broadcasts it to every open session live, and emits privacy-blur:changed.
+func (a *App) SetPrivacyBlurSettings(cfg config.PrivacyBlurConfig) error {
+	cfg = config.NormalizePrivacyBlurConfig(cfg)
+	if err := a.configStore.SetPrivacyBlurSettings(cfg); err != nil {
+		return err
+	}
+	if a.host != nil {
+		a.host.EvalAll(privacyblur.ApplyScript(mustJSON(cfg)))
+	}
+	a.emitPrivacyBlurChanged(cfg)
+	return nil
 }
 
 // ListAccounts returns all registered accounts.

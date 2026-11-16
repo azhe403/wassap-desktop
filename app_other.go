@@ -29,6 +29,11 @@ func (s *stubHost) SetVisible(visible bool) error {
 
 func (s *stubHost) SetActiveSession(id browser.ProfileID) {}
 
+func (s *stubHost) EvalAll(script string) {}
+
+func (s *stubHost) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {
+}
+
 type stubInspector struct{}
 
 func (s *stubInspector) Inspect(id browser.ProfileID) ([]browser.Evidence, error) {
