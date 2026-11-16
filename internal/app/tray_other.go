@@ -1,6 +1,6 @@
 //go:build !windows
 
-package main
+package app
 
 // noopTray is a no-op tray backend for platforms without a system tray
 // implementation. Ready() is false, so close-to-tray can never engage and

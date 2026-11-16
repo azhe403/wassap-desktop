@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"net/http"
@@ -13,7 +13,7 @@ import (
 
 func TestAppHandler_LegacyModeRedirects(t *testing.T) {
 	dirs := appdirs.Under(t.TempDir())
-	app := NewApp(dirs, true) // legacyMode = true
+	app := New(dirs, true, VersionInfo{}) // legacyMode = true
 	h := app.handler()
 	if h == nil {
 		t.Fatal("expected handler in legacy mode, got nil")
@@ -34,7 +34,7 @@ func TestAppHandler_LegacyModeRedirects(t *testing.T) {
 
 func TestAppHandler_Pecut2ServesAssets(t *testing.T) {
 	dirs := appdirs.Under(t.TempDir())
-	app := NewApp(dirs, false) // legacyMode = false
+	app := New(dirs, false, VersionInfo{}) // legacyMode = false
 	h := app.handler()
 	if h != nil {
 		t.Errorf("expected nil handler in Pecut 2 mode (to serve embedded assets), got %v", h)
@@ -43,7 +43,7 @@ func TestAppHandler_Pecut2ServesAssets(t *testing.T) {
 
 func TestApp_OpenAndCloseAccount(t *testing.T) {
 	dirs := appdirs.Under(t.TempDir())
-	app := NewApp(dirs, false)
+	app := New(dirs, false, VersionInfo{})
 
 	id, err := app.OpenAccount("account-a")
 	if err != nil {
@@ -62,7 +62,7 @@ func TestApp_OpenAndCloseAccount(t *testing.T) {
 func TestApp_AccountManagementLifecycle(t *testing.T) {
 	tempHome := t.TempDir()
 	dirs := appdirs.Under(tempHome)
-	app := NewApp(dirs, false)
+	app := New(dirs, false, VersionInfo{})
 
 	// 1. Create two accounts
 	acc1, err := app.CreateAccount("Personal Account")
@@ -102,7 +102,7 @@ func TestApp_AccountManagementLifecycle(t *testing.T) {
 	}
 
 	// 5. Simulate application restart
-	appRestarted := NewApp(dirs, false)
+	appRestarted := New(dirs, false, VersionInfo{})
 	reloadedList, err := appRestarted.ListAccounts()
 	if err != nil {
 		t.Fatalf("ListAccounts after restart failed: %v", err)
@@ -149,7 +149,7 @@ func TestApp_CorruptAccountsJSONDisablesAccountBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	app := NewApp(dirs, false)
+	app := New(dirs, false, VersionInfo{})
 
 	// Every account binding must fail gracefully, not panic.
 	if _, err := app.ListAccounts(); err == nil {
@@ -181,7 +181,7 @@ func TestApp_CorruptAccountsJSONDisablesAccountBindings(t *testing.T) {
 func TestApp_ActiveAccountPersistenceAndSwitching(t *testing.T) {
 	tempHome := t.TempDir()
 	dirs := appdirs.Under(tempHome)
-	app := NewApp(dirs, false)
+	app := New(dirs, false, VersionInfo{})
 
 	// Create 2 accounts
 	acc1, err := app.CreateAccount("Account 1")
@@ -220,7 +220,7 @@ func TestApp_ActiveAccountPersistenceAndSwitching(t *testing.T) {
 	}
 
 	// Simulate restart
-	app2 := NewApp(dirs, false)
+	app2 := New(dirs, false, VersionInfo{})
 	if active := app2.GetActiveAccountID(); active != acc2.ID {
 		t.Errorf("expected active account restored as %q, got %q", acc2.ID, active)
 	}

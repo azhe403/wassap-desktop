@@ -89,7 +89,7 @@ function renderCard(acc, activeId) {
 }
 
 async function loadStorageSummaries(container) {
-    const api = window.go && window.go.main && window.go.main.App;
+    const api = window.go && window.go.app && window.go.app.App;
     if (!api || !api.ListProfiles) return;
 
     try {
@@ -147,7 +147,7 @@ async function toggleInspect(card, accountId) {
 
     panel.innerHTML = '<p class="evidence-loading">Reading profile evidence…</p>';
 
-    const api = window.go && window.go.main && window.go.main.App;
+    const api = window.go && window.go.app && window.go.app.App;
     if (!api || !api.InspectProfile) {
         panel.innerHTML = '<p class="evidence-loading">Inspection is not available.</p>';
         return;

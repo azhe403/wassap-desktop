@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
+	"wassap-desktop/internal/app"
 	"wassap-desktop/internal/appdirs"
 	"wassap-desktop/internal/config"
 	"wassap-desktop/internal/updater"
@@ -57,7 +58,7 @@ func main() {
 	// (Runs before flag.Parse: Go's flag package would reject this flag.)
 	if len(os.Args) == 3 && os.Args[1] == "--relaunch-after-update" {
 		if pid, convErr := strconv.Atoi(os.Args[2]); convErr == nil {
-			if waitErr := waitForPID(pid); waitErr == nil {
+			if waitErr := app.WaitForPID(pid); waitErr == nil {
 				if exe, exeErr := os.Executable(); exeErr == nil {
 					// Crash/power-loss between the apply renames leaves the exe
 					// missing. The relauncher is the one process alive in that
@@ -122,14 +123,15 @@ func main() {
 		log.Printf("log: started, writing to %s", logPath)
 	}
 
-	app := NewApp(dirs, legacyMode)
+	shell := app.New(dirs, legacyMode, app.VersionInfo{Version: version, Commit: commit})
 
-	// Configure asset server:
+	// Wire the asset server:
 	// In legacy mode, handler redirects 302 to web.whatsapp.com directly.
 	// In Pecut 2 mode, assets are served so the test interface is displayed.
+	hooks := app.WailsHooks(shell)
 	assetOpts := &assetserver.Options{
 		Assets:  assets,
-		Handler: app.handler(),
+		Handler: hooks.Handler,
 	}
 
 	title := "Wassap Desktop"
@@ -168,16 +170,16 @@ func main() {
 		WindowStartState: startState,
 		BackgroundColour: &options.RGBA{R: 11, G: 20, B: 26, A: 255},
 		AssetServer:      assetOpts,
-		OnStartup:        app.startup,
-		OnDomReady:       app.domReady,
-		OnBeforeClose:    app.onBeforeClose,
-		OnShutdown:       app.shutdown,
+		OnStartup:        hooks.Startup,
+		OnDomReady:       hooks.DomReady,
+		OnBeforeClose:    hooks.BeforeClose,
+		OnShutdown:       hooks.Shutdown,
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "3f7f3db3-008c-4e3d-a134-0d66e741a2f1",
-			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+			OnSecondInstanceLaunch: hooks.SecondInstance,
 		},
 		Bind: []interface{}{
-			app,
+			shell,
 		},
 		Windows: &windows.Options{
 			WebviewUserDataPath: shellUserDataPath(dirs),

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -127,7 +127,7 @@ func (a *App) setDLState(dl dlDownloadState) {
 
 // GetVersion returns the build-stamped version and commit.
 func (a *App) GetVersion() VersionInfo {
-	return VersionInfo{Version: version, Commit: commit}
+	return a.build
 }
 
 // GetUpdateStatus returns the last known update status. It never performs a

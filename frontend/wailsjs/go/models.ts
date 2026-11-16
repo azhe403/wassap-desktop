@@ -41,6 +41,113 @@ export namespace account {
 
 }
 
+export namespace app {
+	
+	export class ProfileResourceUsage {
+	    id: string;
+	    running: boolean;
+	    processCount: number;
+	    workingSetBytes: number;
+	    cpuPercent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProfileResourceUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.running = source["running"];
+	        this.processCount = source["processCount"];
+	        this.workingSetBytes = source["workingSetBytes"];
+	        this.cpuPercent = source["cpuPercent"];
+	    }
+	}
+	export class ResourceUsage {
+	    appWorkingSetBytes: number;
+	    appCPUPercent: number;
+	    totalWorkingSetBytes: number;
+	    totalCPUPercent: number;
+	    profiles: ProfileResourceUsage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ResourceUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appWorkingSetBytes = source["appWorkingSetBytes"];
+	        this.appCPUPercent = source["appCPUPercent"];
+	        this.totalWorkingSetBytes = source["totalWorkingSetBytes"];
+	        this.totalCPUPercent = source["totalCPUPercent"];
+	        this.profiles = this.convertValues(source["profiles"], ProfileResourceUsage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class UpdateStatus {
+	    state: string;
+	    channel: string;
+	    currentVersion: string;
+	    latestVersion: string;
+	    releaseURL: string;
+	    message?: string;
+	    checkedAt?: string;
+	    progressDone?: number;
+	    progressTotal?: number;
+	    dismissed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.channel = source["channel"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseURL = source["releaseURL"];
+	        this.message = source["message"];
+	        this.checkedAt = source["checkedAt"];
+	        this.progressDone = source["progressDone"];
+	        this.progressTotal = source["progressTotal"];
+	        this.dismissed = source["dismissed"];
+	    }
+	}
+	export class VersionInfo {
+	    version: string;
+	    commit: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VersionInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.commit = source["commit"];
+	    }
+	}
+
+}
+
 export namespace browser {
 	
 	export class Evidence {
@@ -170,113 +277,6 @@ export namespace config {
 	        this.blurMediaPreview = source["blurMediaPreview"];
 	        this.blurMediaGallery = source["blurMediaGallery"];
 	        this.blurInput = source["blurInput"];
-	    }
-	}
-
-}
-
-export namespace main {
-	
-	export class ProfileResourceUsage {
-	    id: string;
-	    running: boolean;
-	    processCount: number;
-	    workingSetBytes: number;
-	    cpuPercent: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new ProfileResourceUsage(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.running = source["running"];
-	        this.processCount = source["processCount"];
-	        this.workingSetBytes = source["workingSetBytes"];
-	        this.cpuPercent = source["cpuPercent"];
-	    }
-	}
-	export class ResourceUsage {
-	    appWorkingSetBytes: number;
-	    appCPUPercent: number;
-	    totalWorkingSetBytes: number;
-	    totalCPUPercent: number;
-	    profiles: ProfileResourceUsage[];
-	
-	    static createFrom(source: any = {}) {
-	        return new ResourceUsage(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.appWorkingSetBytes = source["appWorkingSetBytes"];
-	        this.appCPUPercent = source["appCPUPercent"];
-	        this.totalWorkingSetBytes = source["totalWorkingSetBytes"];
-	        this.totalCPUPercent = source["totalCPUPercent"];
-	        this.profiles = this.convertValues(source["profiles"], ProfileResourceUsage);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class UpdateStatus {
-	    state: string;
-	    channel: string;
-	    currentVersion: string;
-	    latestVersion: string;
-	    releaseURL: string;
-	    message?: string;
-	    checkedAt?: string;
-	    progressDone?: number;
-	    progressTotal?: number;
-	    dismissed: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new UpdateStatus(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.state = source["state"];
-	        this.channel = source["channel"];
-	        this.currentVersion = source["currentVersion"];
-	        this.latestVersion = source["latestVersion"];
-	        this.releaseURL = source["releaseURL"];
-	        this.message = source["message"];
-	        this.checkedAt = source["checkedAt"];
-	        this.progressDone = source["progressDone"];
-	        this.progressTotal = source["progressTotal"];
-	        this.dismissed = source["dismissed"];
-	    }
-	}
-	export class VersionInfo {
-	    version: string;
-	    commit: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new VersionInfo(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.version = source["version"];
-	        this.commit = source["commit"];
 	    }
 	}
 

@@ -8,7 +8,7 @@ import { renderSettingsPage, updateSettingsStatusRow, updatePrivacyBlurControls 
 import { renderProfilesPage, updateProfilesUsage } from './components/profiles-page.js';
 
 // Access Wails backend bindings
-const getApp = () => window.go && window.go.main && window.go.main.App;
+const getApp = () => window.go && window.go.app && window.go.app.App;
 
 // App root containers
 const app = document.querySelector('#app');
@@ -564,7 +564,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const goApp = window.go && window.go.main && window.go.main.App;
+    const goApp = window.go && window.go.app && window.go.app.App;
     if (goApp && goApp.GetPrivacyBlurSettings) {
         goApp.GetPrivacyBlurSettings().then((s) => {
             state.privacyBlur = s;

@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package app
 
 import (
 	"fmt"
@@ -11,12 +11,12 @@ import (
 const synchronize = 0x00100000
 const waitTimeout = 0x00000102 // WAIT_TIMEOUT
 
-// waitForPID blocks until the process with the given pid exits, or 60
+// WaitForPID blocks until the process with the given pid exits, or 60
 // seconds elapse, whichever comes first. It is used by the relaunch helper:
 // the new instance may only start after the old one has fully exited (past
 // WebView2 teardown), otherwise the single-instance lock kills it and the
 // profiles are still held.
-func waitForPID(pid int) error {
+func WaitForPID(pid int) error {
 	if pid <= 0 {
 		return fmt.Errorf("invalid pid %d", pid)
 	}

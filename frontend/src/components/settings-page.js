@@ -466,7 +466,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
     const checkbox = container.querySelector('#setting-close-to-tray-page');
 
     // Load persisted value asynchronously
-    const api = window.go && window.go.main && window.go.main.App;
+    const api = window.go && window.go.app && window.go.app.App;
     if (api && api.GetCloseToTray) {
         api.GetCloseToTray().then((val) => {
             if (checkbox) checkbox.checked = !!val;

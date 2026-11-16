@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -42,6 +42,7 @@ type App struct {
 	ctx        context.Context
 	dirs       appdirs.Dirs
 	legacyMode bool
+	build      VersionInfo
 
 	manager     *browser.Manager
 	host        HostController
@@ -93,8 +94,9 @@ type trayBackend interface {
 	Ready() bool
 }
 
-// NewApp creates a new App application struct.
-func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
+// New creates a new App application struct. build carries the build-time
+// stamp injected by the composition root (ldflags -X main.version=...).
+func New(dirs appdirs.Dirs, legacyMode bool, build VersionInfo) *App {
 	manager, host, insp := initPlatform(dirs)
 
 	repoPath := filepath.Join(dirs.Data, "accounts.json")
@@ -118,6 +120,7 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	app := &App{
 		dirs:        dirs,
 		legacyMode:  legacyMode,
+		build:       build,
 		manager:     manager,
 		host:        host,
 		inspector:   insp,
@@ -151,7 +154,7 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	if err := os.MkdirAll(updatesDir, 0o700); err != nil {
 		log.Printf("updater: cannot create updates dir: %v", err)
 	}
-	app.checker = updater.NewChecker(updater.NewClient(), filepath.Join(dirs.Cache, "update-check.json"), version, commit)
+	app.checker = updater.NewChecker(updater.NewClient(), filepath.Join(dirs.Cache, "update-check.json"), build.Version, build.Commit)
 	app.downloader = updater.NewDownloader(updatesDir)
 	app.lastStatus = app.checker.Snapshot()
 
