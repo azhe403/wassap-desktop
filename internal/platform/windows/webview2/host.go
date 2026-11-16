@@ -680,13 +680,24 @@ func (s *Session) run() {
 	if s.startHidden {
 		hideWindow(hwnd)
 		log.Printf("webview2: opening %s hidden (another session is active)", s.profile)
+		if s.chromium != nil {
+			if err := s.chromium.Hide(); err != nil {
+				log.Printf("webview2: cannot mark controller hidden for %s: %v", s.profile, err)
+			}
+		}
 	} else {
 		_ = showWindow(hwnd)
+		if s.chromium != nil {
+			if err := s.chromium.Show(); err != nil {
+				log.Printf("webview2: cannot mark controller visible for %s: %v", s.profile, err)
+			}
+		}
 	}
 	if s.chromium != nil {
-		_ = s.chromium.Show()
 		s.chromium.Resize()
-		s.chromium.Focus()
+		if !s.startHidden {
+			s.chromium.Focus()
+		}
 	}
 
 	s.setAlive(true)

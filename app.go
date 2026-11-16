@@ -662,6 +662,13 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
 	a.mu.Unlock()
+	// Sweep WebView2 profile folders the shell left behind on previous
+	// launches (run-<pid>). startup only runs in the single-instance lock
+	// winner, so this never touches the live profile of a running instance.
+	// Best-effort: failures are logged, never fatal.
+	if err := cleanupStaleShellProfiles(a.dirs.Data, os.Getpid()); err != nil {
+		log.Printf("shell-cleanup: %v", err)
+	}
 	// Auto updater runs in the background; it never blocks startup and never
 	// downloads anything without the user opting in.
 	go a.updateOnStartup(ctx)
