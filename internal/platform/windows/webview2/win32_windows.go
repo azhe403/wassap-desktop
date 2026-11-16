@@ -316,6 +316,17 @@ func (s *Session) setUpWebView() error {
 		if ok, err := IsSuccess(args); err == nil && !ok {
 			status, _ := WebErrorStatus(args)
 			s.emit(EventProcessFailed, fmt.Errorf("webview2: %s did not load the start page (web error %d)", s.profile, status))
+			return
+		}
+		// Re-apply privacy settings on every navigation: the document-created
+		// prelude bakes the settings as of session start, so a hard reload
+		// would otherwise re-seed stale values. ExecuteScript queues
+		// asynchronously; this callback already runs on the session's UI
+		// thread, so no marshalling is needed.
+		if ha := s.host.privacyApply(); ha != nil {
+			if script := ha(); script != "" {
+				c.Eval(script)
+			}
 		}
 	}
 
@@ -338,6 +349,15 @@ func (s *Session) setUpWebView() error {
 		log.Printf("webview2: cannot inject notification label for %s: %v", s.profile, err)
 	}
 	wireNotificationClickMessage(s, c)
+	// Install the privacy blur engine before the first navigation. Failure is
+	// logged and never fails session setup: privacy is best-effort, like the
+	// notification label.
+	if hp := s.host.privacyPrelude(); hp != nil {
+		if p := hp(); p != "" {
+			c.Init(p)
+			log.Printf("webview2: privacy blur prelude injected for %s", s.profile)
+		}
+	}
 	// Durably grant the notification permission for the WhatsApp origin in
 	// the profile: an already-persisted deny cannot be lifted by the
 	// request-time handler.

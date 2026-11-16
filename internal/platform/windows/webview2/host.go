@@ -99,6 +99,14 @@ type Host struct {
 	// session's pages created. The hook runs on its own goroutine; it must
 	// not block the session's message pump.
 	OnNotificationClick func(browser.ProfileID)
+	// Privacy delegate hooks. Set once, via SetPrivacyDelegate, before any
+	// session is opened; prelude/apply return document-created and live
+	// re-apply scripts for the vendored upstream engine (empty strings
+	// disable injection). onWrite fires when a page posts a
+	// "privacy-blur-set" message (e.g. Alt+/ inside the page).
+	prelude        func() string
+	apply          func() string
+	onPrivacyWrite func(map[string]any)
 	// visible reports whether session windows may be shown at all. The frontend
 	// turns it off while a modal or the settings page owns the content area, so
 	// an account switch cannot superimpose a session over that page.
@@ -234,6 +242,54 @@ func (h *Host) SetActiveSession(id browser.ProfileID) {
 			_ = s.Hide()
 		}
 	}
+}
+
+// SetPrivacyDelegate installs the privacy-blur hooks. Called once at start-up,
+// before any session opens. Passing nil for a hook disables it.
+func (h *Host) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {
+	h.mu.Lock()
+	h.prelude, h.apply, h.onPrivacyWrite = prelude, apply, onWrite
+	h.mu.Unlock()
+}
+
+// privacyPrelude returns the document-created script, or nil.
+func (h *Host) privacyPrelude() func() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.prelude
+}
+
+// privacyApply returns the live re-apply script builder, or nil.
+func (h *Host) privacyApply() func() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.apply
+}
+
+// privacyOnWrite returns the page-message hook, or nil.
+func (h *Host) privacyOnWrite() func(map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.onPrivacyWrite
+}
+
+// EvalAll runs script on every open session, fire-and-forget. Each call is
+// marshalled onto the session's own thread with the same cap as every other
+// session callback. Errors are logged and dropped; privacy is best-effort.
+func (h *Host) EvalAll(script string) {
+	for s := range h.sessionsSnapshot() {
+		s.evalScript(script)
+	}
+}
+
+// evalScript queues script on the session's UI thread.
+func (s *Session) evalScript(script string) {
+	_ = s.call(func() error {
+		if s.chromium != nil {
+			s.chromium.Eval(script)
+		}
+		return nil
+	})
 }
 
 // SetDisplayNames replaces the profile-id to account-name mapping used for

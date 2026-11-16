@@ -211,26 +211,40 @@ func wireNotificationClickMessage(s *Session, c *edge.Chromium) {
 			return
 		}
 		var msg struct {
-			Kind    string `json:"kind"`
-			Account string `json:"account"`
+			Kind    string         `json:"kind"`
+			Account string         `json:"account"`
+			Values  map[string]any `json:"values"`
 		}
 		if err := json.Unmarshal([]byte(message), &msg); err != nil {
 			return
 		}
-		if msg.Kind != "notification-click" {
-			return
-		}
-		if s.host.OnNotificationClick == nil {
-			return
-		}
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("webview2: notification click hook panicked: %v", r)
-				}
+		switch msg.Kind {
+		case "notification-click":
+			if s.host.OnNotificationClick == nil {
+				return
+			}
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("webview2: notification click hook panicked: %v", r)
+					}
+				}()
+				s.host.OnNotificationClick(profile)
 			}()
-			s.host.OnNotificationClick(profile)
-		}()
+		case "privacy-blur-set":
+			// A page flipped a privacy setting in place (e.g. Alt+/). Hand the
+			// values to the app; persistence and re-broadcast happen there.
+			if hook := s.host.privacyOnWrite(); hook != nil && msg.Values != nil {
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("webview2: privacy-blur-set hook panicked: %v", r)
+						}
+					}()
+					hook(msg.Values)
+				}()
+			}
+		}
 	}
 }
 
