@@ -560,6 +560,11 @@ func (s *Session) Show() error {
 		if err := showWindow(s.hwnd); err != nil {
 			return err
 		}
+		if s.chromium != nil {
+			if err := s.chromium.Show(); err != nil {
+				log.Printf("webview2: cannot mark controller visible for %s: %v", s.profile, err)
+			}
+		}
 		if err := setForeground(s.hwnd); err != nil {
 			log.Printf("webview2: cannot focus window for %s: %v", s.profile, err)
 		}
@@ -578,6 +583,11 @@ func (s *Session) Hide() error {
 	}
 	return s.call(func() error {
 		hideWindow(s.hwnd)
+		if s.chromium != nil {
+			if err := s.chromium.Hide(); err != nil {
+				log.Printf("webview2: cannot mark controller hidden for %s: %v", s.profile, err)
+			}
+		}
 		return nil
 	})
 }
