@@ -72,6 +72,16 @@ go test ./...
 cd frontend && npm run build
 ```
 
+## Privacy Blur
+
+Wassap Desktop can blur sensitive WhatsApp content until you hover it — names, profile photos, message previews, bubbles, stickers, media and the typing field — via **Settings → Privacy Blur** or the shield button in the sidebar (`Alt+/` toggles in a chat). Everything runs locally; nothing is sent anywhere.
+
+## Credits
+
+The privacy blur engine is adapted from **WhatsApp Privacy Blur** by Nyihui —
+[Firefox Add-on](https://addons.mozilla.org/en-US/firefox/addon/whatsapp-privacy-blur/) · [source](https://github.com/Nyihui/WhatsappPrivacyBlur-Extension) — MIT licensed.
+Its selector library and blur engine are vendored **unmodified** under `internal/privacyblur/assets/upstream/` (v3.2.0 @ `82cc20e`); Wassap Desktop adds its own adapter (`assets/adapter.js`) and native controls instead of the add-on's in-page panel.
+
 ## Supported Platforms
 
 Windows 10/11 with WebView2 Runtime installed.

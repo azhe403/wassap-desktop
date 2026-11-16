@@ -1,7 +1,7 @@
 # Wassap Desktop Privacy Blur - Design
 
 **Date:** 2026-11-16
-**Status:** Approved by user 2026-11-16 ("Gas, approve", design-gate page). Awaiting implementation via plan.
+**Status:** Implemented on main 2026-11-16 (see git log since eff6166).
 **Scope:** `internal/privacyblur` (new package, vendored engine), `internal/config` (new section + store methods), `app.go` (bindings + startup hook), `app_other.go` (stub), `internal/platform/windows/webview2` (prelude hook, `EvalAll`, `privacy-blur-set` message kind), frontend (Settings section + sidebar shield toggle + state event), `README.md` (credits), `docs` (this file).
 
 ---
