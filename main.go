@@ -107,6 +107,11 @@ func main() {
 	if err := appdirs.Ensure(dirs); err != nil {
 		log.Fatalf("cannot create application directories: %v", err)
 	}
+	// Sweep WebView2 profile folders the shell left behind on previous
+	// launches (run-<pid>). Best-effort: failures are logged, never fatal.
+	if err := cleanupStaleShellProfiles(dirs.Data, os.Getpid()); err != nil {
+		log.Printf("shell-cleanup: %v", err)
+	}
 
 	// Mirror logs to a file as well as stderr so close-path diagnostics are
 	// available even when the app is launched from a double-click. Append;
