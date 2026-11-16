@@ -39,6 +39,83 @@ type AppConfig struct {
 	AutoUpdate bool `json:"autoUpdate"`
 	// UpdateChannel is "stable" (default) or "nightly".
 	UpdateChannel string `json:"updateChannel,omitempty"`
+	// PrivacyBlur is the privacy blur section; nil when never written.
+	PrivacyBlur *PrivacyBlurConfig `json:"privacyBlur,omitempty"`
+}
+
+// PrivacyBlurConfig holds the privacy blur settings. Its keys intentionally
+// mirror the upstream engine's DEFAULT_SETTINGS names so the vendored engine
+// and this store stay trivially comparable. All zero values are invalid in
+// practice; use NormalizePrivacyBlurConfig.
+type PrivacyBlurConfig struct {
+	Enabled           bool    `json:"enabled"`
+	PrivacyMode       string  `json:"privacyMode"` // "blur" | "redacted"
+	BlurAmount        int     `json:"blurAmount"`  // px, 1..10
+	Animation         bool    `json:"animation"`
+	AnimationDuration float64 `json:"animationDuration"` // seconds, 0.05..2
+	InputOpacity      int     `json:"inputOpacity"`     // 0..100
+	UnblurLastN       bool    `json:"unblurLastN"`
+	UnblurLastNCount  int     `json:"unblurLastNCount"` // 1..10
+	BlurAvatars       bool    `json:"blurAvatars"`
+	BlurNames         bool    `json:"blurNames"`
+	BlurPreviews      bool    `json:"blurPreviews"`
+	BlurTextChats     bool    `json:"blurTextChats"`
+	BlurStickers      bool    `json:"blurStickers"`
+	BlurMediaPreview  bool    `json:"blurMediaPreview"`
+	BlurMediaGallery  bool    `json:"blurMediaGallery"`
+	BlurInput         bool    `json:"blurInput"`
+}
+
+// DefaultPrivacyBlurConfig is the out-of-the-box section: everything blurred,
+// master switch off. The master switch never defaults on — a desktop client
+// must not change what the user's screen shows uninvited.
+func DefaultPrivacyBlurConfig() PrivacyBlurConfig {
+	return PrivacyBlurConfig{
+		Enabled:           false,
+		PrivacyMode:       "blur",
+		BlurAmount:        3,
+		Animation:         true,
+		AnimationDuration: 0.25,
+		InputOpacity:      30,
+		UnblurLastN:       false,
+		UnblurLastNCount:  3,
+		BlurAvatars:       true,
+		BlurNames:         true,
+		BlurPreviews:      true,
+		BlurTextChats:     true,
+		BlurStickers:      true,
+		BlurMediaPreview:  true,
+		BlurMediaGallery:  true,
+		BlurInput:         true,
+	}
+}
+
+// NormalizePrivacyBlurConfig clamps every numeric field and fixes the mode
+// enum. Unknown modes fall back to "blur".
+func NormalizePrivacyBlurConfig(c PrivacyBlurConfig) PrivacyBlurConfig {
+	if c.PrivacyMode != "redacted" {
+		c.PrivacyMode = "blur"
+	}
+	c.BlurAmount = clampInt(c.BlurAmount, 1, 10)
+	c.InputOpacity = clampInt(c.InputOpacity, 0, 100)
+	c.UnblurLastNCount = clampInt(c.UnblurLastNCount, 1, 10)
+	switch {
+	case c.AnimationDuration < 0.05:
+		c.AnimationDuration = 0.05
+	case c.AnimationDuration > 2:
+		c.AnimationDuration = 2
+	}
+	return c
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 // Store defines access to application configuration.
@@ -55,6 +132,9 @@ type Store interface {
 	GetAutoUpdate() (bool, error)
 	SetUpdateChannel(channel string) error
 	GetUpdateChannel() (string, error)
+	GetPrivacyBlurSettings() (*PrivacyBlurConfig, error)
+	SetPrivacyBlurSettings(cfg PrivacyBlurConfig) error
+	MergePrivacyBlurSettings(patch map[string]any) (*PrivacyBlurConfig, error)
 }
 
 // JSONStore is a thread-safe, atomic file-backed configuration store.
@@ -251,4 +331,101 @@ func (s *JSONStore) GetWindowState() (*WindowState, error) {
 		return nil, err
 	}
 	return cfg.WindowState, nil
+}
+
+// GetPrivacyBlurSettings loads the privacy blur section. It returns
+// (nil, nil) when the section has never been written.
+func (s *JSONStore) GetPrivacyBlurSettings() (*PrivacyBlurConfig, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	return cfg.PrivacyBlur, nil
+}
+
+// SetPrivacyBlurSettings normalizes cfg and replaces the whole section
+// atomically.
+func (s *JSONStore) SetPrivacyBlurSettings(cfg PrivacyBlurConfig) error {
+	return s.update(func(c *AppConfig) {
+		normalized := NormalizePrivacyBlurConfig(cfg)
+		c.PrivacyBlur = &normalized
+	})
+}
+
+// MergePrivacyBlurSettings applies the recognized keys of patch to the stored
+// section (or to the defaults when unwritten) under the store's write lock,
+// and returns the merged, normalized result. Unrecognized keys and values of
+// the wrong type are ignored; out-of-range numbers are clamped. Concurrent
+// callers serialize on the lock instead of clobbering each other.
+func (s *JSONStore) MergePrivacyBlurSettings(patch map[string]any) (*PrivacyBlurConfig, error) {
+	if err := s.update(func(c *AppConfig) {
+		base := DefaultPrivacyBlurConfig()
+		if c.PrivacyBlur != nil {
+			base = *c.PrivacyBlur
+		}
+		merged := applyPrivacyBlurPatch(base, patch)
+		c.PrivacyBlur = &merged
+	}); err != nil {
+		return nil, err
+	}
+	return s.GetPrivacyBlurSettings()
+}
+
+// applyPrivacyBlurPatch applies recognized keys of patch to base and returns
+// the normalized result. patch values of the wrong type are ignored.
+func applyPrivacyBlurPatch(base PrivacyBlurConfig, patch map[string]any) PrivacyBlurConfig {
+	for key, value := range patch {
+		switch key {
+		case "enabled":
+			if v, ok := value.(bool); ok { base.Enabled = v }
+		case "privacyMode":
+			if v, ok := value.(string); ok { base.PrivacyMode = v }
+		case "blurAmount":
+			if v, ok := asIntPatch(value); ok { base.BlurAmount = v }
+		case "animation":
+			if v, ok := value.(bool); ok { base.Animation = v }
+		case "animationDuration":
+			if v, ok := value.(float64); ok { base.AnimationDuration = v }
+		case "inputOpacity":
+			if v, ok := asIntPatch(value); ok { base.InputOpacity = v }
+		case "unblurLastN":
+			if v, ok := value.(bool); ok { base.UnblurLastN = v }
+		case "unblurLastNCount":
+			if v, ok := asIntPatch(value); ok { base.UnblurLastNCount = v }
+		case "blurAvatars":
+			if v, ok := value.(bool); ok { base.BlurAvatars = v }
+		case "blurNames":
+			if v, ok := value.(bool); ok { base.BlurNames = v }
+		case "blurPreviews":
+			if v, ok := value.(bool); ok { base.BlurPreviews = v }
+		case "blurTextChats":
+			if v, ok := value.(bool); ok { base.BlurTextChats = v }
+		case "blurStickers":
+			if v, ok := value.(bool); ok { base.BlurStickers = v }
+		case "blurMediaPreview":
+			if v, ok := value.(bool); ok { base.BlurMediaPreview = v }
+		case "blurMediaGallery":
+			if v, ok := value.(bool); ok { base.BlurMediaGallery = v }
+		case "blurInput":
+			if v, ok := value.(bool); ok { base.BlurInput = v }
+		}
+	}
+	return NormalizePrivacyBlurConfig(base)
+}
+
+// asIntPatch accepts the numeric types a JSON decoder produces (float64) and
+// int/int64 for hand-built patches, truncating toward zero.
+func asIntPatch(v any) (int, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	default:
+		return 0, false
+	}
 }
