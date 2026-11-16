@@ -583,6 +583,12 @@ export function updatePrivacyBlurControls(settings) {
     const enabled = !!settings.enabled;
     group.classList.toggle('settings-group-disabled', !enabled);
 
+    // Keyboard/AT operability must match the visual dimming: the sub-controls
+    // are really disabled, not just opacity-hidden.
+    group.querySelectorAll('[data-key], #setting-privacy-blur-amount, #setting-privacy-input-opacity, #setting-privacy-lastn-count, .privacy-mode-btn').forEach((el) => {
+        el.disabled = !enabled;
+    });
+
     const master = group.querySelector('#setting-privacy-blur-enabled');
     if (master) master.checked = enabled;
 

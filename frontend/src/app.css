@@ -629,6 +629,13 @@ html, body {
     pointer-events: none;
 }
 
+.settings-group-disabled .settings-checkbox,
+.settings-group-disabled .privacy-mode-btn,
+.settings-group-disabled .settings-range,
+.settings-group-disabled .settings-select {
+    cursor: default;
+}
+
 .settings-privacy-footnote {
     padding: 10px 14px;
     font-size: 11px;

@@ -69,6 +69,11 @@ type App struct {
 
 	tray trayBackend
 
+	// broadcastMu serializes the privacy blur broadcast (save → read-latest →
+	// EvalAll → event) across the two write paths (settings save and in-page
+	// Alt+/), so no session ever observes a payload older than the store.
+	broadcastMu sync.Mutex
+
 	checker    *updater.Checker
 	downloader *updater.Downloader
 	updateMu   sync.Mutex
@@ -130,8 +135,8 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 	app.wirePlatformNotifications()
 
 	// Privacy blur: install the delegate before any session can be opened.
-	// The prelude closure re-reads config.json at each call so sessions
-	// created later see current settings, not the startup snapshot.
+	// The prelude closure re-reads config.json at every call (including each
+	// navigation re-apply) — a tiny file, well within navigation budget.
 	if app.host != nil {
 		app.host.SetPrivacyDelegate(
 			func() string { return privacyblur.PreludeScript(mustJSON(app.effectivePrivacyBlur())) },
@@ -177,7 +182,7 @@ func NewApp(dirs appdirs.Dirs, legacyMode bool) *App {
 
 // mustJSON marshals v with encoding/json, which also escapes <, > and &, so
 // the output is safe to embed in a one-line JavaScript assignment.
-func mustJSON(v interface{}) string {
+func mustJSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic(fmt.Sprintf("privacy blur: cannot marshal settings: %v", err))
@@ -196,20 +201,29 @@ func (a *App) effectivePrivacyBlur() config.PrivacyBlurConfig {
 }
 
 // handlePrivacyBlurWrite merges a page-originated patch (e.g. the engine's
-// Alt+/ handler) into the stored settings under the store's lock, re-broadcasts
-// the merged object to every open session, and emits privacy-blur:changed.
+// Alt+/ handler) into the stored settings under the store's lock, then
+// broadcasts the latest stored state to every open session.
 func (a *App) handlePrivacyBlurWrite(values map[string]any) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("privacy blur: write hook panicked: %v", r)
 		}
 	}()
-	merged, err := a.configStore.MergePrivacyBlurSettings(values)
-	if err != nil {
+	if _, err := a.configStore.MergePrivacyBlurSettings(values); err != nil {
 		log.Printf("privacy blur: merge failed: %v", err)
 		return
 	}
-	cfg := config.NormalizePrivacyBlurConfig(*merged)
+	a.broadcastPrivacyBlur()
+}
+
+// broadcastPrivacyBlur applies the LATEST stored privacy blur settings to
+// every open session and emits privacy-blur:changed. The payload is re-read
+// from the store under broadcastMu, so broadcasts from concurrent writers
+// converge instead of interleaving stale and fresh snapshots per session.
+func (a *App) broadcastPrivacyBlur() {
+	a.broadcastMu.Lock()
+	defer a.broadcastMu.Unlock()
+	cfg := a.effectivePrivacyBlur()
 	if a.host != nil {
 		a.host.EvalAll(privacyblur.ApplyScript(mustJSON(cfg)))
 	}
@@ -229,16 +243,14 @@ func (a *App) GetPrivacyBlurSettings() config.PrivacyBlurConfig {
 }
 
 // SetPrivacyBlurSettings replaces the whole privacy blur section, persists
-// it, broadcasts it to every open session live, and emits privacy-blur:changed.
+// it, broadcasts the latest state to every open session live, and emits
+// privacy-blur:changed.
 func (a *App) SetPrivacyBlurSettings(cfg config.PrivacyBlurConfig) error {
 	cfg = config.NormalizePrivacyBlurConfig(cfg)
 	if err := a.configStore.SetPrivacyBlurSettings(cfg); err != nil {
 		return err
 	}
-	if a.host != nil {
-		a.host.EvalAll(privacyblur.ApplyScript(mustJSON(cfg)))
-	}
-	a.emitPrivacyBlurChanged(cfg)
+	a.broadcastPrivacyBlur()
 	return nil
 }
 

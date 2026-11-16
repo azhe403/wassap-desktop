@@ -14,10 +14,27 @@
 
   var local = {
     get: function (defaults, cb) {
+      // Chrome accepts string, array or object defaults.
+      var keys;
+      if (typeof defaults === 'string') {
+        keys = [defaults];
+      } else if (Array.isArray(defaults)) {
+        keys = defaults.slice();
+      } else if (defaults && typeof defaults === 'object') {
+        keys = Object.keys(defaults);
+      } else {
+        keys = [];
+      }
       var out = {};
-      var keys = (defaults && typeof defaults === 'object' && !Array.isArray(defaults)) ? Object.keys(defaults) : [];
       for (var i = 0; i < keys.length; i++) {
-        out[keys[i]] = Object.prototype.hasOwnProperty.call(boot, keys[i]) ? boot[keys[i]] : defaults[keys[i]];
+        var has = Object.prototype.hasOwnProperty.call(boot, keys[i]);
+        if (has) {
+          out[keys[i]] = boot[keys[i]];
+        } else if (defaults && !Array.isArray(defaults) && typeof defaults === 'object') {
+          out[keys[i]] = defaults[keys[i]];
+        } else {
+          out[keys[i]] = undefined;
+        }
       }
       if (typeof cb === 'function') cb(out);
     },
@@ -27,6 +44,8 @@
         for (var k in obj) {
           if (Object.prototype.hasOwnProperty.call(obj, k)) {
             boot[k] = obj[k];
+            // oldValue is intentionally undefined: the engine re-gets the whole
+            // object on change, so the previous values are never read.
             changes[k] = { oldValue: undefined, newValue: obj[k] };
           }
         }

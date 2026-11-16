@@ -37,7 +37,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -284,6 +283,9 @@ func (h *Host) EvalAll(script string) {
 
 // evalScript queues script on the session's UI thread.
 func (s *Session) evalScript(script string) {
+	if !s.Alive() {
+		return
+	}
 	_ = s.call(func() error {
 		if s.chromium != nil {
 			s.chromium.Eval(script)
@@ -462,11 +464,6 @@ type openRequest struct {
 	err error
 }
 
-type callback struct {
-	fn     func() error
-	result chan error
-}
-
 // Session is one window with one WebView2 environment and one user data
 // folder. All Win32 and COM work happens on the session's own OS thread.
 type Session struct {
@@ -496,7 +493,7 @@ type Session struct {
 	chromium *edge.Chromium
 	runtimeVersion string
 
-	callbacks atomic.Pointer[callback]
+	callbacks callbackQueue
 
 	closeOnce sync.Once
 	closed    chan struct{}
@@ -766,17 +763,17 @@ func (s *Session) call(f func() error) error {
 	if s.threadID != 0 && s.threadID == currentThreadID() {
 		return f()
 	}
-	result := make(chan error, 1)
-	s.callbacks.Store(&callback{fn: f, result: result})
+	req := &callback{fn: f, result: make(chan error, 1)}
+	s.callbacks.push(req)
 	if !postMessage(s.hwnd, wmInvokeCallback, 0, 0) {
-		s.callbacks.CompareAndSwap(s.callbacks.Load(), nil)
+		s.callbacks.remove(req)
 		return errors.New("webview2: cannot post to the session window")
 	}
 	select {
-	case err := <-result:
+	case err := <-req.result:
 		return err
 	case <-time.After(callTimeout):
-		s.callbacks.CompareAndSwap(s.callbacks.Load(), nil)
+		s.callbacks.remove(req)
 		return errors.New("webview2: session call timed out")
 	}
 }

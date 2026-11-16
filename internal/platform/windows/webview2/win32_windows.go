@@ -420,15 +420,19 @@ func windowProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 }
 
 func (s *Session) serveCallback() {
-	req := s.callbacks.Swap(nil)
-	if req == nil {
-		return
+	// Drain everything pending: each PostMessage woke us for at least one
+	// queued call, and draining here keeps the queue from growing stale.
+	for {
+		req := s.callbacks.pop()
+		if req == nil {
+			return
+		}
+		var err error
+		if req.fn != nil {
+			err = req.fn()
+		}
+		req.result <- err
 	}
-	var err error
-	if req.fn != nil {
-		err = req.fn()
-	}
-	req.result <- err
 }
 
 // postCallbackToCurrentThread is unused: Session.call performs the thread check
