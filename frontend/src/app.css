@@ -252,6 +252,37 @@ html, body {
     box-shadow: 0 0 0 2px var(--accent-active);
 }
 
+.sidebar-shield-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--bg-sidebar-hover);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.sidebar-shield-btn:hover {
+    background-color: #2a3942;
+    color: var(--text-primary);
+    transform: scale(1.05);
+}
+
+.sidebar-shield-btn.active {
+    background-color: var(--accent-emerald);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.45);
+}
+
+.sidebar-shield-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-active);
+}
+
 /* ==========================================================================
    Content Area
    ========================================================================== */
@@ -523,6 +554,86 @@ html, body {
 
 .update-status-text.error {
     color: var(--danger-red);
+}
+
+/* ==========================================================================
+   Privacy Blur settings
+   ========================================================================== */
+
+.settings-range {
+    width: 180px;
+    accent-color: var(--accent-emerald);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.settings-range:focus-visible {
+    outline: 2px solid var(--accent-active);
+    outline-offset: 2px;
+}
+
+.settings-value-chip {
+    display: inline-block;
+    min-width: 34px;
+    text-align: center;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--accent-emerald);
+    background-color: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 6px;
+    padding: 1px 6px;
+    vertical-align: middle;
+}
+
+.privacy-mode-segmented {
+    display: flex;
+    gap: 4px;
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 4px;
+    flex-shrink: 0;
+}
+
+.privacy-mode-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.privacy-mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.privacy-mode-btn.active {
+    background-color: var(--accent-emerald);
+    color: #ffffff;
+}
+
+.privacy-mode-btn:focus-visible {
+    outline: 2px solid var(--accent-active);
+    outline-offset: 1px;
+}
+
+/* Master off: dim everything below the master row; clicks land nowhere. */
+.settings-group-disabled > .settings-toggle-row:not(.privacy-master-row),
+.settings-group-disabled > .settings-privacy-footnote {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.settings-privacy-footnote {
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-color);
 }
 
 .update-status-actions {

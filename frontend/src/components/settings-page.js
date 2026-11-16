@@ -29,6 +29,145 @@ export function renderSettingsPage(container, handlers = {}) {
                 </label>
             </div>
 
+            <div class="settings-section-title">Privacy Blur</div>
+            <div class="settings-group" id="settings-privacy-blur-group">
+                <label class="settings-toggle-row privacy-master-row" for="setting-privacy-blur-enabled">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Privacy Blur</span>
+                        <span class="settings-toggle-desc">
+                            Blur contacts, chats and media until you hover them. Applies to every account. Alt+/ toggles it in a chat.
+                        </span>
+                    </div>
+                    <input
+                        id="setting-privacy-blur-enabled"
+                        class="settings-checkbox"
+                        type="checkbox"
+                    />
+                </label>
+
+                <div class="settings-toggle-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Mode</span>
+                        <span class="settings-toggle-desc">
+                            Blur reveals on hover; Redacted blocks everything out black.
+                        </span>
+                    </div>
+                    <div class="privacy-mode-segmented" role="group" aria-label="Privacy mode">
+                        <button type="button" class="privacy-mode-btn" data-mode="blur">Blur</button>
+                        <button type="button" class="privacy-mode-btn" data-mode="redacted">Redacted</button>
+                    </div>
+                </div>
+
+                <label class="settings-toggle-row" for="setting-privacy-blur-amount">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Blur strength <span id="privacy-blur-amount-value" class="settings-value-chip">3px</span></span>
+                        <span class="settings-toggle-desc">Higher values hide more detail.</span>
+                    </div>
+                    <input id="setting-privacy-blur-amount" class="settings-range" type="range" min="1" max="10" step="1" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-avatars">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Profile photos</span>
+                        <span class="settings-toggle-desc">Avatars and status rings in the chat list and headers.</span>
+                    </div>
+                    <input id="setting-privacy-avatars" class="settings-checkbox" type="checkbox" data-key="blurAvatars" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-names">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Contact &amp; group names</span>
+                        <span class="settings-toggle-desc">Names in the chat list, chat header and group info.</span>
+                    </div>
+                    <input id="setting-privacy-names" class="settings-checkbox" type="checkbox" data-key="blurNames" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-previews">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Chat previews</span>
+                        <span class="settings-toggle-desc">Last-message previews in the chat list.</span>
+                    </div>
+                    <input id="setting-privacy-previews" class="settings-checkbox" type="checkbox" data-key="blurPreviews" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-bubbles">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Open chat messages</span>
+                        <span class="settings-toggle-desc">Message bubbles in the open conversation.</span>
+                    </div>
+                    <input id="setting-privacy-bubbles" class="settings-checkbox" type="checkbox" data-key="blurTextChats" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-stickers">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Stickers</span>
+                        <span class="settings-toggle-desc">Stickers in chats.</span>
+                    </div>
+                    <input id="setting-privacy-stickers" class="settings-checkbox" type="checkbox" data-key="blurStickers" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-media">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Media previews</span>
+                        <span class="settings-toggle-desc">Images, videos and document previews in chats.</span>
+                    </div>
+                    <input id="setting-privacy-media" class="settings-checkbox" type="checkbox" data-key="blurMediaPreview" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-gallery">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Media gallery</span>
+                        <span class="settings-toggle-desc">The fullscreen media viewer.</span>
+                    </div>
+                    <input id="setting-privacy-gallery" class="settings-checkbox" type="checkbox" data-key="blurMediaGallery" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-input">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Typing field</span>
+                        <span class="settings-toggle-desc">Fade the composer instead of blurring it. Uses the opacity slider below.</span>
+                    </div>
+                    <input id="setting-privacy-input" class="settings-checkbox" type="checkbox" data-key="blurInput" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-input-opacity">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Typing field opacity <span id="privacy-input-opacity-value" class="settings-value-chip">30%</span></span>
+                        <span class="settings-toggle-desc">How visible the text you type is while Privacy Blur is on.</span>
+                    </div>
+                    <input id="setting-privacy-input-opacity" class="settings-range" type="range" min="0" max="100" step="5" />
+                </label>
+
+                <label class="settings-toggle-row" for="setting-privacy-lastn">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Keep last messages visible</span>
+                        <span class="settings-toggle-desc">Always show the newest messages in the open chat, blur the rest.</span>
+                    </div>
+                    <input id="setting-privacy-lastn" class="settings-checkbox" type="checkbox" data-key="unblurLastN" />
+                </label>
+
+                <div class="settings-toggle-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Visible messages</span>
+                        <span class="settings-toggle-desc">How many of the newest messages stay readable.</span>
+                    </div>
+                    <select id="setting-privacy-lastn-count" class="settings-select">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                    </select>
+                </div>
+
+                <div class="settings-privacy-footnote">Changes apply immediately to open chats. Nothing leaves this device.</div>
+            </div>
+
             <div class="settings-section-title">Software Update</div>
             <div class="settings-group">
                 <label class="settings-toggle-row" for="setting-auto-update">
@@ -110,6 +249,111 @@ export function renderSettingsPage(container, handlers = {}) {
                     e.target.checked = !enabled;
                 }
             }
+        });
+    }
+
+    // --- Privacy Blur section ----------------------------------------
+
+    const privacyGroup = container.querySelector('#settings-privacy-blur-group');
+    const privacyMaster = container.querySelector('#setting-privacy-blur-enabled');
+    const privacyAmount = container.querySelector('#setting-privacy-blur-amount');
+    const privacyAmountValue = container.querySelector('#privacy-blur-amount-value');
+    const privacyInputOpacity = container.querySelector('#setting-privacy-input-opacity');
+    const privacyInputOpacityValue = container.querySelector('#privacy-input-opacity-value');
+    const privacyLastNCount = container.querySelector('#setting-privacy-lastn-count');
+    const privacyModeButtons = container.querySelectorAll('.privacy-mode-btn');
+
+    // The settings object the page renders and mutates locally; replaced on
+    // every blur:changed event and on every successful save.
+    let privacy = handlers.privacyBlur || null;
+
+    function applyPrivacy(settings) {
+        privacy = settings;
+        updatePrivacyBlurControls(settings);
+    }
+
+    async function commitPrivacy(next) {
+        if (handlers.onPrivacyBlurChange) {
+            const ok = await handlers.onPrivacyBlurChange(next);
+            if (ok === false && api && api.GetPrivacyBlurSettings) {
+                // Revert the optimistic UI to what the backend actually stored.
+                try {
+                    applyPrivacy(await api.GetPrivacyBlurSettings());
+                } catch (err) {
+                    console.error('Failed to re-read privacy blur settings:', err);
+                }
+            } else if (ok !== false) {
+                applyPrivacy(next);
+            }
+        }
+    }
+
+    function commitKey(key) {
+        return (event) => {
+            if (!privacy) return;
+            const target = event.target;
+            const value = target.type === 'checkbox' ? target.checked : target.value;
+            commitPrivacy({ ...privacy, [key]: value });
+        };
+    }
+
+    if (handlers.onPrivacyBlurChange) {
+        container.querySelectorAll('#settings-privacy-blur-group [data-key]').forEach((el) => {
+            el.addEventListener('change', commitKey(el.getAttribute('data-key')));
+        });
+    }
+
+    if (privacyMaster) {
+        privacyMaster.addEventListener('change', (e) => {
+            if (!privacy) return;
+            commitPrivacy({ ...privacy, enabled: e.target.checked });
+        });
+    }
+
+    privacyModeButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!privacy) return;
+            commitPrivacy({ ...privacy, privacyMode: btn.getAttribute('data-mode') });
+        });
+    });
+
+    if (privacyAmount) {
+        privacyAmount.addEventListener('input', () => {
+            if (privacyAmountValue) privacyAmountValue.textContent = `${privacyAmount.value}px`;
+        });
+        privacyAmount.addEventListener('change', () => {
+            if (!privacy) return;
+            commitPrivacy({ ...privacy, blurAmount: Number(privacyAmount.value) });
+        });
+    }
+
+    if (privacyInputOpacity) {
+        privacyInputOpacity.addEventListener('input', () => {
+            if (privacyInputOpacityValue) privacyInputOpacityValue.textContent = `${privacyInputOpacity.value}%`;
+        });
+        privacyInputOpacity.addEventListener('change', () => {
+            if (!privacy) return;
+            commitPrivacy({ ...privacy, inputOpacity: Number(privacyInputOpacity.value) });
+        });
+    }
+
+    if (privacyLastNCount) {
+        privacyLastNCount.addEventListener('change', () => {
+            if (!privacy) return;
+            commitPrivacy({ ...privacy, unblurLastNCount: Number(privacyLastNCount.value) });
+        });
+    }
+
+    // Seed from the handler-provided object (render() passes state.privacyBlur)
+    // and refresh from the backend so a reopened page never shows stale rows.
+    if (privacy) {
+        updatePrivacyBlurControls(privacy);
+    }
+    if (api && api.GetPrivacyBlurSettings) {
+        api.GetPrivacyBlurSettings().then((s) => {
+            applyPrivacy(s);
+        }).catch((err) => {
+            console.error('Failed to load privacy blur settings:', err);
         });
     }
 
@@ -323,6 +567,52 @@ export function renderUpdateStatus(container, s) {
     if (dismissBtn) {
         dismissBtn.style.display = showDismiss ? '' : 'none';
     }
+}
+
+/**
+ * Applies a PrivacyBlurConfig object to the section's controls, dimming the
+ * sub-rows when the master switch is off. Safe to call when the settings
+ * page is not in the DOM. Called from renderSettingsPage and from main.js on
+ * every `privacy-blur:changed` event.
+ */
+export function updatePrivacyBlurControls(settings) {
+    if (typeof document === 'undefined') return;
+    const group = document.querySelector('#settings-privacy-blur-group');
+    if (!group || !settings) return;
+
+    const enabled = !!settings.enabled;
+    group.classList.toggle('settings-group-disabled', !enabled);
+
+    const master = group.querySelector('#setting-privacy-blur-enabled');
+    if (master) master.checked = enabled;
+
+    group.querySelectorAll('[data-key]').forEach((el) => {
+        el.checked = !!settings[el.getAttribute('data-key')];
+    });
+
+    const amount = group.querySelector('#setting-privacy-blur-amount');
+    if (amount) {
+        amount.value = String(settings.blurAmount ?? 3);
+        const chip = group.querySelector('#privacy-blur-amount-value');
+        if (chip) chip.textContent = `${settings.blurAmount ?? 3}px`;
+    }
+
+    const opacity = group.querySelector('#setting-privacy-input-opacity');
+    if (opacity) {
+        opacity.value = String(settings.inputOpacity ?? 30);
+        const chip = group.querySelector('#privacy-input-opacity-value');
+        if (chip) chip.textContent = `${settings.inputOpacity ?? 30}%`;
+    }
+
+    const modeButtons = group.querySelectorAll('.privacy-mode-btn');
+    modeButtons.forEach((btn) => {
+        const active = btn.getAttribute('data-mode') === (settings.privacyMode || 'blur');
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    const lastNCount = group.querySelector('#setting-privacy-lastn-count');
+    if (lastNCount) lastNCount.value = String(settings.unblurLastNCount ?? 3);
 }
 
 /**

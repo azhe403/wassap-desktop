@@ -4,7 +4,7 @@ import './app.css';
 import { state } from './state.js';
 import { renderSidebar, renderEmptyState } from './components/sidebar.js';
 import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
-import { renderSettingsPage, updateSettingsStatusRow } from './components/settings-page.js';
+import { renderSettingsPage, updateSettingsStatusRow, updatePrivacyBlurControls } from './components/settings-page.js';
 import { renderProfilesPage, updateProfilesUsage } from './components/profiles-page.js';
 
 // Access Wails backend bindings
@@ -103,6 +103,15 @@ function applyUpdateBadge() {
 /**
  * Rerender UI from current state
  */
+function applyPrivacyShield() {
+    const btn = document.querySelector('#btn-privacy-shield');
+    if (!btn) return;
+    const on = !!(state.privacyBlur && state.privacyBlur.enabled);
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.title = `Privacy Blur: ${on ? 'on' : 'off'}`;
+}
+
 function render() {
     const isSettings = state.currentView === 'settings';
     const isProfiles = state.currentView === 'profiles';
@@ -118,9 +127,12 @@ function render() {
             onAddAccount: handleOpenAddModal,
             onSettings: handleOpenSettings,
             onProfileManagement: handleOpenProfileManagement,
+            privacyBlurEnabled: !!(state.privacyBlur && state.privacyBlur.enabled),
+            onTogglePrivacy: handleTogglePrivacyBlur,
         }
     );
     applyUpdateBadge();
+    applyPrivacyShield();
 
     if (isSettings) {
         // Hide native WebView so the settings page is visible
@@ -128,6 +140,8 @@ function render() {
         contentView.className = 'settings-shell-view';
         renderSettingsPage(contentView, {
             onCloseToTrayChange: handleCloseToTrayChange,
+            privacyBlur: state.privacyBlur,
+            onPrivacyBlurChange: handlePrivacyBlurChange,
         });
         updateUsageChip();
         return;
@@ -263,6 +277,44 @@ function handleOpenAddModal() {
             }
         },
     });
+}
+
+/**
+ * Persist a full privacy blur settings object. Returns true on success so the
+ * settings page can decide whether to keep the optimistic UI.
+ */
+async function handlePrivacyBlurChange(full) {
+    const api = getApp();
+    if (!api || !api.SetPrivacyBlurSettings) return false;
+    try {
+        await api.SetPrivacyBlurSettings(full);
+        state.privacyBlur = full;
+        applyPrivacyShield();
+        return true;
+    } catch (err) {
+        console.error('Failed to save privacy blur settings:', err);
+        showToast('Failed to save privacy blur settings: ' + err, 'error');
+        return false;
+    }
+}
+
+async function handleTogglePrivacyBlur() {
+    if (!state.privacyBlur) {
+        const api = getApp();
+        if (api && api.GetPrivacyBlurSettings) {
+            try {
+                state.privacyBlur = await api.GetPrivacyBlurSettings();
+            } catch (err) {
+                console.error('Failed to load privacy blur settings:', err);
+                return;
+            }
+        }
+    }
+    if (!state.privacyBlur) return;
+    const ok = await handlePrivacyBlurChange({ ...state.privacyBlur, enabled: !state.privacyBlur.enabled });
+    if (ok) {
+        showToast(state.privacyBlur.enabled ? 'Privacy Blur on' : 'Privacy Blur off', 'success');
+    }
 }
 
 function handleOpenSettings() {
@@ -503,9 +555,22 @@ window.addEventListener('DOMContentLoaded', () => {
             applyUpdateBadge();
             updateSettingsStatusRow(s);
         });
+        // Privacy blur state pushes (in-page Alt+/ toggle, settings save).
+        window.runtime.EventsOn('privacy-blur:changed', (s) => {
+            if (!s) return;
+            state.privacyBlur = s;
+            applyPrivacyShield();
+            updatePrivacyBlurControls(s);
+        });
     }
 
     const goApp = window.go && window.go.main && window.go.main.App;
+    if (goApp && goApp.GetPrivacyBlurSettings) {
+        goApp.GetPrivacyBlurSettings().then((s) => {
+            state.privacyBlur = s;
+            applyPrivacyShield();
+        }).catch(() => {});
+    }
     if (goApp && goApp.GetUpdateStatus) {
         goApp.GetUpdateStatus().then((s) => {
             state.updateBadge = !!s && (s.state === 'available' || s.state === 'downloaded') && !s.dismissed;

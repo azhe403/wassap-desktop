@@ -15,4 +15,5 @@ export const state = {
     resourceUsage: null, // last sample from GetResourceUsage (polled every 2s)
     currentView: 'account', // 'account' | 'settings' | 'profiles'
     updateBadge: false, // true when an update is available (or downloaded) and not dismissed
+    privacyBlur: null, // effective privacy blur settings; null until loaded
 };
