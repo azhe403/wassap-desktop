@@ -56,14 +56,14 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
             <div class="sidebar-divider"></div>
 
             <div class="sidebar-footer">
+                <button id="btn-add-account" class="sidebar-icon-btn" title="Add Account" aria-label="Add Account">
+                    <span>➕</span>
+                </button>
                 <button id="btn-privacy-shield" class="sidebar-shield-btn ${handlers.privacyBlurEnabled ? 'active' : ''}" title="Privacy Blur: ${handlers.privacyBlurEnabled ? 'on' : 'off'}" aria-pressed="${handlers.privacyBlurEnabled ? 'true' : 'false'}" aria-label="Toggle Privacy Blur">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8L12 3z"/>
                         <path d="M9.5 12l2 2 3.5-3.5"/>
                     </svg>
-                </button>
-                <button id="btn-add-account" class="sidebar-icon-btn" title="Add Account" aria-label="Add Account">
-                    <span>➕</span>
                 </button>
                 <button id="btn-settings" class="sidebar-icon-btn ${activeId === '__settings__' ? 'active' : ''}" title="Settings" aria-label="Settings">
                     <span>⚙️</span>

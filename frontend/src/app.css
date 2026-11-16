@@ -636,6 +636,141 @@ html, body {
     cursor: default;
 }
 
+.settings-shell {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+    margin-top: 4px;
+}
+
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 196px;
+    flex-shrink: 0;
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.settings-nav-item:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.settings-nav-item.active {
+    background-color: var(--accent-emerald);
+    color: #ffffff;
+}
+
+.settings-nav-item:focus-visible {
+    outline: 2px solid var(--accent-active);
+    outline-offset: 1px;
+}
+
+.settings-panels {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.settings-panel {
+    display: none;
+}
+
+.settings-panel.active {
+    display: block;
+}
+
+.settings-notice-row {
+    align-items: center;
+}
+
+.settings-license-chip {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+}
+
+.settings-notice-link {
+    color: var(--accent-emerald);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid var(--accent-emerald);
+    border-radius: 6px;
+    padding: 6px 12px;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.settings-notice-link:hover {
+    background-color: var(--accent-emerald);
+    color: #ffffff;
+}
+
+.settings-license-details {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border-color);
+}
+
+.settings-license-details summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+.settings-license-details summary:hover {
+    color: var(--text-primary);
+}
+
+.settings-license-text {
+    margin: 12px 0 0;
+    max-height: 320px;
+    overflow-y: auto;
+    background-color: #111b21;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .settings-privacy-footnote {
     padding: 10px 14px;
     font-size: 11px;
@@ -729,8 +864,9 @@ html, body {
     display: flex;
     flex-direction: column;
     padding: 32px 48px;
-    max-width: 680px;
-    overflow-y: auto;
+    max-width: 880px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .settings-page-header {

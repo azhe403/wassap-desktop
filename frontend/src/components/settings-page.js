@@ -1,9 +1,12 @@
 /**
  * Renders the full-page Settings view inside #content-view.
+ * Sub-navigation between sections is component-local; the last-selected
+ * section survives re-renders within the session.
  *
  * @param {HTMLElement} container
- * @param {Object} handlers - { onCloseToTrayChange }
+ * @param {Object} handlers - { onCloseToTrayChange, onPrivacyBlurChange, privacyBlur }
  */
+let settingsActivePanel = 'general';
 export function renderSettingsPage(container, handlers = {}) {
     container.innerHTML = `
         <div class="settings-page-view" role="region" aria-label="Settings">
@@ -12,6 +15,28 @@ export function renderSettingsPage(container, handlers = {}) {
                 <p class="settings-page-subtitle">Configure Wassap Desktop preferences</p>
             </div>
 
+            <div class="settings-shell">
+                <nav class="settings-nav" aria-label="Settings sections">
+                    <button class="settings-nav-item active" type="button" data-panel="general" aria-current="page">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.66 1.66 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.66 1.66 0 0 0-1.82-.33 1.66 1.66 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.66 1.66 0 0 0-1-1.51 1.66 1.66 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.66 1.66 0 0 0 .33-1.82 1.66 1.66 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.66 1.66 0 0 0 1.51-1 1.66 1.66 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.66 1.66 0 0 0 1.82.33h0a1.66 1.66 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.66 1.66 0 0 0 1 1.51h0a1.66 1.66 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.66 1.66 0 0 0-.33 1.82v0a1.66 1.66 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.66 1.66 0 0 0-1.51 1z"/></svg>
+                        <span>General</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-panel="privacy">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 2.8v5.4c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.8L12 3z"/><path d="M9.5 12l2 2 3.5-3.5"/></svg>
+                        <span>Privacy Blur</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-panel="update">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                        <span>Software Update</span>
+                    </button>
+                    <button class="settings-nav-item" type="button" data-panel="about">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></svg>
+                        <span>About</span>
+                    </button>
+                </nav>
+
+                <div class="settings-panels">
+                    <section class="settings-panel active" data-panel="general" aria-label="General settings">
             <div class="settings-section-title">General</div>
             <div class="settings-group">
                 <label class="settings-toggle-row" for="setting-close-to-tray-page">
@@ -29,6 +54,9 @@ export function renderSettingsPage(container, handlers = {}) {
                 </label>
             </div>
 
+                    </section>
+
+                    <section class="settings-panel" data-panel="privacy" aria-label="Privacy Blur settings">
             <div class="settings-section-title">Privacy Blur</div>
             <div class="settings-group" id="settings-privacy-blur-group">
                 <label class="settings-toggle-row privacy-master-row" for="setting-privacy-blur-enabled">
@@ -168,6 +196,9 @@ export function renderSettingsPage(container, handlers = {}) {
                 <div class="settings-privacy-footnote">Changes apply immediately to open chats. Nothing leaves this device.</div>
             </div>
 
+                    </section>
+
+                    <section class="settings-panel" data-panel="update" aria-label="Software Update settings">
             <div class="settings-section-title">Software Update</div>
             <div class="settings-group">
                 <label class="settings-toggle-row" for="setting-auto-update">
@@ -211,7 +242,10 @@ export function renderSettingsPage(container, handlers = {}) {
                 </div>
             </div>
 
-            <div class="settings-section-title" style="margin-top: 32px;">About</div>
+                    </section>
+
+                    <section class="settings-panel" data-panel="about" aria-label="About">
+            <div class="settings-section-title">About</div>
             <div class="settings-group">
                 <div class="settings-toggle-row" style="cursor: default;">
                     <div class="settings-toggle-text">
@@ -221,6 +255,209 @@ export function renderSettingsPage(container, handlers = {}) {
                         </span>
                     </div>
                     <span id="about-version" style="font-size: 12px; color: var(--text-secondary);">dev</span>
+                </div>
+            </div>
+
+            <div class="settings-section-title" style="margin-top: 28px;">Third-Party Notices</div>
+            <div class="settings-group">
+                <div class="settings-toggle-row settings-notice-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">WhatsApp Privacy Blur <span class="settings-license-chip">MIT</span></span>
+                        <span class="settings-toggle-desc">
+                            The engine behind Privacy Blur. by Nyihui — WhatsappPrivacyBlur-Extension, v3.2.0 @ 82cc20e, vendored unmodified.
+                        </span>
+                    </div>
+                    <a class="settings-notice-link" href="https://github.com/Nyihui/WhatsappPrivacyBlur-Extension" data-open-url="https://github.com/Nyihui/WhatsappPrivacyBlur-Extension">Source</a>
+                </div>
+
+                <div class="settings-toggle-row settings-notice-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Nunito <span class="settings-license-chip">SIL OFL 1.1</span></span>
+                        <span class="settings-toggle-desc">
+                            Typeface used by this app. Copyright 2016 The Nunito Project Authors.
+                        </span>
+                    </div>
+                    <a class="settings-notice-link" href="https://fonts.google.com/specimen/Nunito" data-open-url="https://fonts.google.com/specimen/Nunito">Font</a>
+                </div>
+
+                <div class="settings-toggle-row settings-notice-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Wails <span class="settings-license-chip">MIT</span></span>
+                        <span class="settings-toggle-desc">
+                            Desktop application framework. Copyright (c) 2018-Present Lea Anthony.
+                        </span>
+                    </div>
+                    <a class="settings-notice-link" href="https://wails.io" data-open-url="https://wails.io">wails.io</a>
+                </div>
+
+                <div class="settings-toggle-row settings-notice-row" style="cursor: default;">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">go-webview2 <span class="settings-license-chip">MIT</span></span>
+                        <span class="settings-toggle-desc">
+                            Go bindings for the Microsoft WebView2 control. Copyright (c) 2020 John Chadwick; portions Copyright (c) 2017 Serge Zaitsev.
+                        </span>
+                    </div>
+                    <a class="settings-notice-link" href="https://github.com/wailsapp/go-webview2" data-open-url="https://github.com/wailsapp/go-webview2">Source</a>
+                </div>
+
+                <p class="settings-privacy-footnote" style="border-top: 1px solid var(--border-color);">
+                    WhatsApp is a trademark of Meta Platforms, Inc. Wassap Desktop is not affiliated with, endorsed by, or sponsored by Meta or WhatsApp. It embeds WhatsApp Web for your own account.
+                </p>
+
+                <details class="settings-license-details">
+                    <summary>Full license texts</summary>
+                    <pre class="settings-license-text">MIT License — WhatsApp Privacy Blur (WhatsappPrivacyBlur-Extension)
+Copyright (c) 2026 Nyihui
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+MIT License — Wails
+Copyright (c) 2018-Present Lea Anthony
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+MIT License — go-webview2
+Copyright (c) 2020 John Chadwick; portions Copyright (c) 2017 Serge Zaitsev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+SIL Open Font License Version 1.1 - 26 February 2007
+Copyright 2016 The Nunito Project Authors (contact@sansoxygen.com)
+https://scripts.sil.org/OFL
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION &amp; CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
+                </details>
+            </div>
+                    </section>
                 </div>
             </div>
         </div>
@@ -482,6 +719,51 @@ export function renderSettingsPage(container, handlers = {}) {
             }
         });
     }
+
+    // --- External links: open in the system browser, never navigate the shell ---
+
+    container.querySelectorAll('[data-open-url]').forEach((el) => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            const url = el.getAttribute('data-open-url');
+            if (!url) return;
+            if (window.runtime && window.runtime.BrowserOpenURL) {
+                window.runtime.BrowserOpenURL(url);
+            } else if (window.open) {
+                window.open(url, '_blank', 'noopener');
+            }
+        });
+    });
+
+    // --- Sub-navigation between sections -------------------------------
+
+    const navItems = container.querySelectorAll('.settings-nav-item');
+    const panels = container.querySelectorAll('.settings-panel');
+
+    function showPanel(name) {
+        settingsActivePanel = name;
+        navItems.forEach((item) => {
+            const active = item.getAttribute('data-panel') === name;
+            item.classList.toggle('active', active);
+            if (active) {
+                item.setAttribute('aria-current', 'page');
+            } else {
+                item.removeAttribute('aria-current');
+            }
+        });
+        panels.forEach((panel) => {
+            panel.classList.toggle('active', panel.getAttribute('data-panel') === name);
+        });
+    }
+
+    navItems.forEach((item) => {
+        item.addEventListener('click', () => {
+            showPanel(item.getAttribute('data-panel'));
+        });
+    });
+
+    // Re-entering the page preserves the section the user was last on.
+    showPanel(settingsActivePanel);
 }
 
 /**
