@@ -128,6 +128,53 @@ export namespace browser {
 
 }
 
+export namespace config {
+	
+	export class PrivacyBlurConfig {
+	    enabled: boolean;
+	    privacyMode: string;
+	    blurAmount: number;
+	    animation: boolean;
+	    animationDuration: number;
+	    inputOpacity: number;
+	    unblurLastN: boolean;
+	    unblurLastNCount: number;
+	    blurAvatars: boolean;
+	    blurNames: boolean;
+	    blurPreviews: boolean;
+	    blurTextChats: boolean;
+	    blurStickers: boolean;
+	    blurMediaPreview: boolean;
+	    blurMediaGallery: boolean;
+	    blurInput: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrivacyBlurConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.privacyMode = source["privacyMode"];
+	        this.blurAmount = source["blurAmount"];
+	        this.animation = source["animation"];
+	        this.animationDuration = source["animationDuration"];
+	        this.inputOpacity = source["inputOpacity"];
+	        this.unblurLastN = source["unblurLastN"];
+	        this.unblurLastNCount = source["unblurLastNCount"];
+	        this.blurAvatars = source["blurAvatars"];
+	        this.blurNames = source["blurNames"];
+	        this.blurPreviews = source["blurPreviews"];
+	        this.blurTextChats = source["blurTextChats"];
+	        this.blurStickers = source["blurStickers"];
+	        this.blurMediaPreview = source["blurMediaPreview"];
+	        this.blurMediaGallery = source["blurMediaGallery"];
+	        this.blurInput = source["blurInput"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class ProfileResourceUsage {

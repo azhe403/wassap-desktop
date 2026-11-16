@@ -50,6 +50,10 @@ export function GetCloseToTray() {
   return window['go']['main']['App']['GetCloseToTray']();
 }
 
+export function GetPrivacyBlurSettings() {
+  return window['go']['main']['App']['GetPrivacyBlurSettings']();
+}
+
 export function GetResourceUsage() {
   return window['go']['main']['App']['GetResourceUsage']();
 }
@@ -116,6 +120,10 @@ export function SetAutoUpdate(arg1) {
 
 export function SetCloseToTray(arg1) {
   return window['go']['main']['App']['SetCloseToTray'](arg1);
+}
+
+export function SetPrivacyBlurSettings(arg1) {
+  return window['go']['main']['App']['SetPrivacyBlurSettings'](arg1);
 }
 
 export function SetUpdateChannel(arg1) {
