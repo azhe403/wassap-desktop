@@ -106,6 +106,10 @@ type Host struct {
 	prelude        func() string
 	apply          func() string
 	onPrivacyWrite func(map[string]any)
+	// onAvatarUpdate receives data URIs from page avatar messages; an empty
+	// URI means the photo was cleared. Set once at start-up via
+	// SetAvatarDelegate.
+	onAvatarUpdate func(browser.ProfileID, string)
 	// visible reports whether session windows may be shown at all. The frontend
 	// turns it off while a modal or the settings page owns the content area, so
 	// an account switch cannot superimpose a session over that page.
@@ -270,6 +274,21 @@ func (h *Host) privacyOnWrite() func(map[string]any) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.onPrivacyWrite
+}
+
+// SetAvatarDelegate installs the profile-photo message hook. An empty data
+// URI means the page reports that the photo was cleared.
+func (h *Host) SetAvatarDelegate(onUpdate func(browser.ProfileID, string)) {
+	h.mu.Lock()
+	h.onAvatarUpdate = onUpdate
+	h.mu.Unlock()
+}
+
+// avatarOnUpdate returns the profile-photo message hook, or nil.
+func (h *Host) avatarOnUpdate() func(browser.ProfileID, string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.onAvatarUpdate
 }
 
 // EvalAll runs script on every open session, fire-and-forget. Each call is

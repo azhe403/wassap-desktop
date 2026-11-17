@@ -13,6 +13,7 @@ import (
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
 
+	"wassap-desktop/internal/avatar"
 	"wassap-desktop/internal/browser"
 )
 
@@ -349,6 +350,9 @@ func (s *Session) setUpWebView() error {
 		log.Printf("webview2: cannot inject notification label for %s: %v", s.profile, err)
 	}
 	wireNotificationClickMessage(s, c)
+	// Watch the account's own profile photo. Best-effort like the notification
+	// label: a broken selector leaves the initials avatar in place.
+	c.Init(avatar.DocumentScript(string(s.profile)))
 	// Install the privacy blur engine before the first navigation. Failure is
 	// logged and never fails session setup: privacy is best-effort, like the
 	// notification label.

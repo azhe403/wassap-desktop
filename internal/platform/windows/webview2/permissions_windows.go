@@ -10,6 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
+
+	"wassap-desktop/internal/browser"
 )
 
 // Local COM shims for the WebView2 profile permission APIs. The raw
@@ -244,8 +246,32 @@ func wireNotificationClickMessage(s *Session, c *edge.Chromium) {
 					hook(msg.Values)
 				}()
 			}
+		case "avatar-update":
+			hook := s.host.avatarOnUpdate()
+			dataURI, _ := msg.Values["dataUrl"].(string)
+			if hook == nil || dataURI == "" {
+				return
+			}
+			runAvatarHook(hook, s.profile, dataURI)
+		case "avatar-clear":
+			if hook := s.host.avatarOnUpdate(); hook != nil {
+				runAvatarHook(hook, s.profile, "")
+			}
 		}
 	}
+}
+
+// runAvatarHook contains any panic from a delegate installed by the app. It
+// runs synchronously so update/clear messages keep their arrival order: two
+// goroutines could otherwise apply an old photo after a clear. The delegate's
+// work is a small local file write plus an event emit.
+func runAvatarHook(hook func(browser.ProfileID, string), profile browser.ProfileID, dataURI string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("webview2: avatar hook panicked: %v", r)
+		}
+	}()
+	hook(profile, dataURI)
 }
 
 // injectAccountLabel installs a window.Notification wrapper on the session's
