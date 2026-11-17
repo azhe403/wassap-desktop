@@ -114,7 +114,20 @@ MutationObserver (2 s debounce) + a 30 s interval, with **no visibilityState gat
 - In-page `fetch` readability is **confirmed**: the CDN self-photo URL yielded a 2905-byte blob from page context; the static logo yielded 3086 bytes. Transport by in-page fetch → base64 is viable.
 - No-photo/placeholder case was not observed directly (only account-a was open; UI automation could not target account-b's sidebar button). Placeholder exclusion is therefore rule-based, not observed: accept self-photo candidates only from media hosts (`*.cdn.whatsapp.net`, `pps.whatsapp.net`), require `naturalWidth >= 32`, and reject `static.whatsapp.net`, `data:`, and `blob:` sources. This excludes both the WA logo and typical inline placeholder artwork.
 
-Consequence for implementation: the primary selector list in §Constraints is superseded by the spike results above; `message-yourself-row img` is primary, `navbar-item-me-tab-photo` is retained only as a harmless fallback for older builds.## What's left to the builder
+Consequence for implementation: the primary selector list in §Constraints is superseded by the spike results above; `message-yourself-row img` is primary, `navbar-item-me-tab-photo` is retained only as a harmless fallback for older builds.
+
+## Smoke test results (2026-11-17, built dev binary against the real profiles)
+
+- Fresh account before any cached photo → initials: PASS. account-b rendered "A0" initials until its photo was fetched.
+- Opened account → photo appears: PASS. `avatars/account-a.jpg` (2905 bytes, matching the spike's fetched blob size) written at 08:45:21; the sidebar showed the photo instead of initials.
+- Background/non-active session also scrapes: PASS. `avatars/account-b.jpg` (1317 bytes) was written at 08:47:52 while the other account was active.
+- Change photo in WA → updates within ~30 s: NOT VERIFIED live (no automation for WhatsApp Web profile editing). The fingerprint/refresh path is pinned by unit tests on the generated script and store dedupe.
+- Clear photo in WA → initials return: NOT VERIFIED live. Tombstone is covered by unit tests (`avatar-clear` message → host `Store.Clear` → event with empty hash → frontend deletes the data URI).
+- Delete account → avatar files removed: NOT VERIFIED live. `RemoveAccount` calls `avatarStore.Clear` and the store's clear test passes.
+- Privacy blur on → no interaction: NOT VERIFIED visually; the two features touch different DOM surfaces and no error was logged.
+- No avatar-related errors appeared in the app log during the run.
+
+## What's left to the builder
 
 - Exact selector ordering and debounce constants; tune against the real page if the interval proves chatty.
 - Whether the `.sha256` sidecar or re-decode-and-compare is cheaper to keep consistent; either satisfies the dedupe requirement.
