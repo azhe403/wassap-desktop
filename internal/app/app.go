@@ -13,6 +13,7 @@ import (
 
 	"wassap-desktop/internal/account"
 	"wassap-desktop/internal/appdirs"
+	"wassap-desktop/internal/avatar"
 	"wassap-desktop/internal/browser"
 	"wassap-desktop/internal/config"
 	"wassap-desktop/internal/privacyblur"
@@ -35,6 +36,7 @@ type HostController interface {
 	SetActiveSession(id browser.ProfileID)
 	EvalAll(script string)
 	SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
+	SetAvatarDelegate(onUpdate func(browser.ProfileID, string))
 }
 
 // App is the desktop shell application and Wails binding target.
@@ -49,6 +51,7 @@ type App struct {
 	inspector   browser.Inspector
 	accountSvc  account.Service
 	configStore config.Store
+	avatarStore *avatar.Store
 
 	mu             sync.Mutex
 	currentProfile string
@@ -126,6 +129,7 @@ func New(dirs appdirs.Dirs, legacyMode bool, build VersionInfo) *App {
 		inspector:   insp,
 		accountSvc:  accountSvc,
 		configStore: cfgStore,
+		avatarStore: avatar.NewStore(dirs.Data),
 		closeToTray: closeToTray,
 	}
 	windowState, wsErr := cfgStore.GetWindowState()
@@ -146,6 +150,7 @@ func New(dirs appdirs.Dirs, legacyMode bool, build VersionInfo) *App {
 			func() string { return privacyblur.ApplyScript(mustJSON(app.effectivePrivacyBlur())) },
 			app.handlePrivacyBlurWrite,
 		)
+		app.host.SetAvatarDelegate(app.handleAvatarUpdate)
 	}
 
 	// Auto updater: passive and fail-soft until the user opts in. The
@@ -265,6 +270,50 @@ func (a *App) ListAccounts() ([]account.Account, error) {
 	return a.accountSvc.List()
 }
 
+// avatarChanged is the payload of the account-avatar:changed Wails event.
+// An empty hash means the photo was cleared and the UI should use initials.
+type avatarChanged struct {
+	ID   string `json:"id"`
+	Hash string `json:"hash"`
+}
+
+// handleAvatarUpdate stores a profile photo posted by a WebView2 session. An
+// empty data URI is the photo-cleared signal from the page.
+func (a *App) handleAvatarUpdate(id browser.ProfileID, dataURI string) {
+	accountID := string(id)
+	if accountID == "" || a.avatarStore == nil {
+		return
+	}
+	if dataURI == "" {
+		if err := a.avatarStore.Clear(accountID); err != nil {
+			log.Printf("avatar: cannot clear %s: %v", accountID, err)
+			return
+		}
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "account-avatar:changed", avatarChanged{ID: accountID})
+		}
+		return
+	}
+	hash, changed, err := a.avatarStore.Put(accountID, dataURI)
+	if err != nil {
+		log.Printf("avatar: cannot store %s: %v", accountID, err)
+		return
+	}
+	if !changed || a.ctx == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, "account-avatar:changed", avatarChanged{ID: accountID, Hash: hash})
+}
+
+// GetAccountAvatar returns the cached profile photo as a data URI, or "" when
+// the account has none. Bound to the frontend.
+func (a *App) GetAccountAvatar(id string) string {
+	if a.avatarStore == nil {
+		return ""
+	}
+	return a.avatarStore.Get(id)
+}
+
 // GetAccount returns an account by ID.
 func (a *App) GetAccount(id string) (*account.Account, error) {
 	if a.accountSvc == nil {
@@ -318,6 +367,11 @@ func (a *App) RemoveAccount(id string) error {
 	var lastErr error
 	for {
 		if lastErr = a.accountSvc.Remove(id); lastErr == nil {
+			if a.avatarStore != nil {
+				if err := a.avatarStore.Clear(id); err != nil {
+					log.Printf("remove: cannot clear avatar for %q: %v", id, err)
+				}
+			}
 			return nil
 		}
 		if time.Now().After(deadline) {
