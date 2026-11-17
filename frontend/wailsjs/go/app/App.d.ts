@@ -23,6 +23,8 @@ export function DownloadUpdate():Promise<void>;
 
 export function GetAccount(arg1:string):Promise<account.Account>;
 
+export function GetAccountAvatar(arg1:string):Promise<string>;
+
 export function GetActiveAccountID():Promise<string>;
 
 export function GetAutoUpdate():Promise<boolean>;

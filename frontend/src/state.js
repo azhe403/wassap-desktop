@@ -3,6 +3,7 @@
  */
 export const state = {
     accounts: [],
+    avatars: {}, // account id -> cached profile photo data URI
     activeAccountId: null,
     switchingAccountId: null,
     // switching locks account switches while one is running, so a second

@@ -38,6 +38,10 @@ export function GetAccount(arg1) {
   return window['go']['app']['App']['GetAccount'](arg1);
 }
 
+export function GetAccountAvatar(arg1) {
+  return window['go']['app']['App']['GetAccountAvatar'](arg1);
+}
+
 export function GetActiveAccountID() {
   return window['go']['app']['App']['GetActiveAccountID']();
 }

@@ -6,6 +6,7 @@ import { renderSidebar, renderEmptyState } from './components/sidebar.js';
 import { showAddAccountModal, showRenameModal, showConfirmModal } from './components/modal.js';
 import { renderSettingsPage, updateSettingsStatusRow, updatePrivacyBlurControls } from './components/settings-page.js';
 import { renderProfilesPage, updateProfilesUsage } from './components/profiles-page.js';
+import { fetchAvatars } from './utils/avatar-image.js';
 
 // Access Wails backend bindings
 const getApp = () => window.go && window.go.app && window.go.app.App;
@@ -129,7 +130,8 @@ function render() {
             onProfileManagement: handleOpenProfileManagement,
             privacyBlurEnabled: !!(state.privacyBlur && state.privacyBlur.enabled),
             onTogglePrivacy: handleTogglePrivacyBlur,
-        }
+        },
+        state.avatars
     );
     applyUpdateBadge();
     applyPrivacyShield();
@@ -154,7 +156,7 @@ function render() {
         renderProfilesPage(contentView, state.accounts, state.activeAccountId, {
             onRename: handleRenameAccount,
             onRemove: handleRemoveAccount,
-        });
+        }, state.avatars);
         if (state.resourceUsage) updateProfilesUsage(state.resourceUsage);
         updateUsageChip();
         return;
@@ -485,6 +487,7 @@ async function refreshAccounts(retryCount = 0) {
             name: a.Name || a.name,
             createdAt: a.CreatedAt || a.createdAt,
         }));
+        state.avatars = await fetchAvatars(api, state.accounts.map(a => a.id));
 
         const activeId = await api.GetActiveAccountID();
         state.activeAccountId = activeId || null;
@@ -561,6 +564,20 @@ window.addEventListener('DOMContentLoaded', () => {
             state.privacyBlur = s;
             applyPrivacyShield();
             updatePrivacyBlurControls(s);
+        });
+        // Profile photos scraped from each account's WhatsApp Web session.
+        window.runtime.EventsOn('account-avatar:changed', async (change) => {
+            if (!change || !change.id) return;
+            if (!change.hash) {
+                delete state.avatars[change.id];
+                render();
+                return;
+            }
+            const next = await fetchAvatars(getApp(), [change.id]);
+            if (next[change.id]) {
+                state.avatars[change.id] = next[change.id];
+                render();
+            }
         });
     }
 

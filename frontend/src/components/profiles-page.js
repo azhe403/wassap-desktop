@@ -1,4 +1,5 @@
 import { getInitials, getAvatarColor } from '../utils/avatar.js';
+import { avatarImageHTML } from '../utils/avatar-image.js';
 
 /**
  * Renders the full-page Profile Management view inside #content-view.
@@ -9,8 +10,9 @@ import { getInitials, getAvatarColor } from '../utils/avatar.js';
  * @param {Array} accounts - [{ id, name, createdAt }]
  * @param {string|null} activeId - the account whose session is on screen
  * @param {Object} handlers - { onRename, onRemove }
+ * @param {Object} avatars - account id -> profile photo data URI
  */
-export function renderProfilesPage(container, accounts, activeId, handlers = {}) {
+export function renderProfilesPage(container, accounts, activeId, handlers = {}, avatars = {}) {
     container.innerHTML = `
         <div class="settings-page-view profiles-page-view" role="region" aria-label="Profile Management">
             <div class="settings-page-header">
@@ -23,7 +25,7 @@ export function renderProfilesPage(container, accounts, activeId, handlers = {})
                 <p class="profiles-empty">No accounts yet. Add one with the ➕ button in the sidebar.</p>
             ` : `
                 <div class="profiles-list">
-                    ${accounts.map(acc => renderCard(acc, activeId)).join('')}
+                    ${accounts.map(acc => renderCard(acc, activeId, avatars)).join('')}
                 </div>
             `}
         </div>
@@ -55,7 +57,7 @@ export function renderProfilesPage(container, accounts, activeId, handlers = {})
     loadStorageSummaries(container);
 }
 
-function renderCard(acc, activeId) {
+function renderCard(acc, activeId, avatars = {}) {
     const color = getAvatarColor(acc.id || acc.name);
     const initials = getInitials(acc.name);
     const isActive = acc.id === activeId;
@@ -67,6 +69,7 @@ function renderCard(acc, activeId) {
             <div class="profile-mgmt-main">
                 <div class="account-avatar-static" style="background-color: ${color.bg}; color: ${color.fg};">
                     <span>${escapeHTML(initials)}</span>
+                    ${avatarImageHTML(acc.id, avatars, '', 'account-avatar-static-img')}
                 </div>
                 <div class="profile-mgmt-info">
                     <div class="profile-mgmt-name-row">

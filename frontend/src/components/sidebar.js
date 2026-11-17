@@ -1,4 +1,5 @@
 import { getInitials, getAvatarColor } from '../utils/avatar.js';
+import { avatarImageHTML } from '../utils/avatar-image.js';
 import logoIcon from '../assets/images/logo-universal.png';
 
 /**
@@ -9,8 +10,9 @@ import logoIcon from '../assets/images/logo-universal.png';
  * @param {string|null} activeId
  * @param {string|null} switchingId
  * @param {Object} handlers
+ * @param {Object} avatars - account id -> profile photo data URI
  */
-export function renderSidebar(container, accounts, activeId, switchingId, handlers) {
+export function renderSidebar(container, accounts, activeId, switchingId, handlers, avatars = {}) {
     container.innerHTML = `
         <aside class="app-sidebar" aria-label="Account Switcher">
             <div class="sidebar-header">
@@ -41,6 +43,7 @@ export function renderSidebar(container, accounts, activeId, switchingId, handle
                                 data-id="${acc.id}"
                             >
                                 <span>${escapeHTML(initials)}</span>
+                                ${avatarImageHTML(acc.id, avatars, '', 'account-avatar-img')}
                                 <span class="unread-badge" aria-hidden="true"></span>
                                 ${isSwitching ? `
                                     <div class="switching-overlay" aria-label="Switching profile">
