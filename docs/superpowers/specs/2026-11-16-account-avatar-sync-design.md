@@ -113,6 +113,7 @@ MutationObserver (2 s debounce) + a 30 s interval, with **no visibilityState gat
 - The first image inside `[data-testid="chatlist-header"]` is **not** the self photo: it is `https://static.whatsapp.net/...`, `naturalWidth=84` (app chrome/logo). It must be excluded.
 - In-page `fetch` readability is **confirmed**: the CDN self-photo URL yielded a 2905-byte blob from page context; the static logo yielded 3086 bytes. Transport by in-page fetch → base64 is viable.
 - No-photo/placeholder case was not observed directly (only account-a was open; UI automation could not target account-b's sidebar button). Placeholder exclusion is therefore rule-based, not observed: accept self-photo candidates only from media hosts (`*.cdn.whatsapp.net`, `pps.whatsapp.net`), require `naturalWidth >= 32`, and reject `static.whatsapp.net`, `data:`, and `blob:` sources. This excludes both the WA logo and typical inline placeholder artwork.
+- Post-review hardening (2026-11-17): the injected script also rejects any self-row containing `[data-testid*="default-contact-refreshed"]` or `[data-testid*="default-group-refreshed"]`. Those testids are documented in the vendored privacy-blur selectors as WA's default silhouette; if WA ever serves that silhouette from a media host, the sidebar keeps the app's initials instead of showing it.
 
 Consequence for implementation: the primary selector list in §Constraints is superseded by the spike results above; `message-yourself-row img` is primary, `navbar-item-me-tab-photo` is retained only as a harmless fallback for older builds.
 

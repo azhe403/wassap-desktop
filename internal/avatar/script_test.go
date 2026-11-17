@@ -38,4 +38,7 @@ func TestDocumentScriptSkipsVisibilityGateAndPostsOnlyOnFingerprintChange(t *tes
 	if !strings.Contains(script, "lastUrl && !url") {
 		t.Error("script must detect a cleared photo (previous URL disappeared)")
 	}
+	if !strings.Contains(script, `default-contact-refreshed`) || !strings.Contains(script, `default-group-refreshed`) {
+		t.Error("script must exclude WA's default silhouette so photoless accounts keep initials")
+	}
 }

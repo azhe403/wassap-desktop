@@ -32,6 +32,11 @@ func DocumentScript(accountID string) string {
   }
 
   function photoUrl() {
+    var row = document.querySelector('[data-testid="message-yourself-row"]');
+    // Vendored privacy-blur selectors mark WA's default silhouette with
+    // default-contact-refreshed / default-group-refreshed. Treat those as
+    // "no photo" so the app's own initials remain visible.
+    if (row && row.querySelector('[data-testid*="default-contact-refreshed"], [data-testid*="default-group-refreshed"]')) return '';
     var el = selfImage();
     if (!el) return '';
     var nw = el.naturalWidth || 0;
