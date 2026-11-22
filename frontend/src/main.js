@@ -142,6 +142,7 @@ function render() {
         contentView.className = 'settings-shell-view';
         renderSettingsPage(contentView, {
             onCloseToTrayChange: handleCloseToTrayChange,
+            onSmartRAMSaverChange: handleSmartRAMSaverChange,
             privacyBlur: state.privacyBlur,
             onPrivacyBlurChange: handlePrivacyBlurChange,
         });
@@ -378,6 +379,25 @@ async function handleCloseToTrayChange(enabled) {
             await api.SetCloseToTray(enabled);
             showToast(
                 enabled ? 'Close to tray enabled' : 'Close to tray disabled',
+                'success'
+            );
+            return true;
+        } catch (err) {
+            console.error('Failed to save settings:', err);
+            showToast('Failed to save settings: ' + err, 'error');
+            return false;
+        }
+    }
+    return false;
+}
+
+async function handleSmartRAMSaverChange(enabled) {
+    const api = getApp();
+    if (api && api.SetSmartRAMSaver) {
+        try {
+            await api.SetSmartRAMSaver(enabled);
+            showToast(
+                enabled ? 'Smart RAM Saver enabled' : 'Smart RAM Saver disabled',
                 'success'
             );
             return true;

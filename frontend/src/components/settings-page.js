@@ -52,6 +52,19 @@ export function renderSettingsPage(container, handlers = {}) {
                         type="checkbox" 
                     />
                 </label>
+                <label class="settings-toggle-row" for="setting-smart-ram-saver-page">
+                    <div class="settings-toggle-text">
+                        <span class="settings-toggle-title">Smart RAM Saver</span>
+                        <span class="settings-toggle-desc">
+                            Automatically trims background session memory when system RAM usage is high.
+                        </span>
+                    </div>
+                    <input 
+                        id="setting-smart-ram-saver-page" 
+                        class="settings-checkbox" 
+                        type="checkbox" 
+                    />
+                </label>
             </div>
 
                     </section>
@@ -483,6 +496,27 @@ OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
                 if (ok === false) {
                     // Revert so the UI does not claim a setting that never
                     // reached disk.
+                    e.target.checked = !enabled;
+                }
+            }
+        });
+    }
+
+    const smartRAMCheckbox = container.querySelector('#setting-smart-ram-saver-page');
+    if (api && api.GetSmartRAMSaver) {
+        api.GetSmartRAMSaver().then((val) => {
+            if (smartRAMCheckbox) smartRAMCheckbox.checked = !!val;
+        }).catch((err) => {
+            console.error('Failed to load smart RAM saver setting:', err);
+        });
+    }
+
+    if (smartRAMCheckbox) {
+        smartRAMCheckbox.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            if (handlers.onSmartRAMSaverChange) {
+                const ok = await handlers.onSmartRAMSaverChange(enabled);
+                if (ok === false) {
                     e.target.checked = !enabled;
                 }
             }
