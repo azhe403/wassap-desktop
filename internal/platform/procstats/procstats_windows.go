@@ -29,8 +29,10 @@ type Proc struct {
 }
 
 var (
+	kernel32                      = windows.NewLazySystemDLL("kernel32.dll")
 	ntdll                         = windows.NewLazySystemDLL("ntdll.dll")
 	psapi                         = windows.NewLazySystemDLL("psapi.dll")
+	procGlobalMemoryStatusEx      = kernel32.NewProc("GlobalMemoryStatusEx")
 	procNtQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
 	procGetProcessMemoryInfo      = psapi.NewProc("GetProcessMemoryInfo")
 	procEmptyWorkingSet           = psapi.NewProc("EmptyWorkingSet")
@@ -74,6 +76,18 @@ type processMemoryCounters struct {
 	quotaNonPagedPoolUsage     uintptr
 	pagefileUsage              uintptr
 	peakPagefileUsage          uintptr
+}
+
+type memoryStatusEx struct {
+	cbSize               uint32
+	memoryLoad           uint32
+	totalPhys            uint64
+	availPhys            uint64
+	totalPageFile        uint64
+	availPageFile        uint64
+	totalVirtual         uint64
+	availVirtual         uint64
+	availExtendedVirtual uint64
 }
 
 // Snapshot lists every live WebView2 process and our own executable. It skips
@@ -249,4 +263,16 @@ func TrimUserDataWorkingSet(userDataDir string) (int, error) {
 	}
 	return count, nil
 }
+
+// SystemMemoryLoad returns the current percentage of physical memory in use (0-100).
+func SystemMemoryLoad() (uint32, error) {
+	var ms memoryStatusEx
+	ms.cbSize = uint32(unsafe.Sizeof(ms))
+	r, _, err := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&ms)))
+	if r == 0 {
+		return 0, err
+	}
+	return ms.memoryLoad, nil
+}
+
 

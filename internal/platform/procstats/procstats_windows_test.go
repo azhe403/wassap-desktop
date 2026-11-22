@@ -57,5 +57,15 @@ func TestTrimProcessWorkingSet(t *testing.T) {
 	if count != 0 {
 		t.Fatalf("expected 0 trimmed processes for empty dir, got %d", count)
 	}
+
+	load, err := SystemMemoryLoad()
+	if err != nil {
+		t.Fatalf("SystemMemoryLoad() failed: %v", err)
+	}
+	if load == 0 || load > 100 {
+		t.Errorf("SystemMemoryLoad() expected 1..100, got %d", load)
+	}
+	t.Logf("system memory load: %d%%", load)
 }
+
 

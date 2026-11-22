@@ -19,3 +19,6 @@ func TrimProcessWorkingSet(pid uint32) error { return nil }
 
 func TrimUserDataWorkingSet(userDataDir string) (int, error) { return 0, nil }
 
+func SystemMemoryLoad() (uint32, error) { return 0, nil }
+
+
