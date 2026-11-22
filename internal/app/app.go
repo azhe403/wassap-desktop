@@ -17,6 +17,7 @@ import (
 	"wassap-desktop/internal/browser"
 	"wassap-desktop/internal/config"
 	"wassap-desktop/internal/privacyblur"
+	"wassap-desktop/internal/platform/procstats"
 	"wassap-desktop/internal/storage"
 	"wassap-desktop/internal/updater"
 
@@ -58,6 +59,7 @@ type App struct {
 	activeAccount  string
 	switching      bool
 	closeToTray    bool
+	smartRAMSaver  bool
 	forceQuit      bool
 	quitting       bool
 	windowState    *config.WindowState
@@ -119,18 +121,24 @@ func New(dirs appdirs.Dirs, legacyMode bool, build VersionInfo) *App {
 	if err != nil {
 		log.Printf("app: cannot load close-to-tray preference, defaulting to off: %v", err)
 	}
+	smartRAMSaver, err := cfgStore.GetSmartRAMSaver()
+	if err != nil {
+		log.Printf("app: cannot load smart RAM saver preference, defaulting to on: %v", err)
+		smartRAMSaver = true
+	}
 
 	app := &App{
-		dirs:        dirs,
-		legacyMode:  legacyMode,
-		build:       build,
-		manager:     manager,
-		host:        host,
-		inspector:   insp,
-		accountSvc:  accountSvc,
-		configStore: cfgStore,
-		avatarStore: avatar.NewStore(dirs.Data),
-		closeToTray: closeToTray,
+		dirs:          dirs,
+		legacyMode:    legacyMode,
+		build:         build,
+		manager:       manager,
+		host:          host,
+		inspector:     insp,
+		accountSvc:    accountSvc,
+		configStore:   cfgStore,
+		avatarStore:   avatar.NewStore(dirs.Data),
+		closeToTray:   closeToTray,
+		smartRAMSaver: smartRAMSaver,
 	}
 	windowState, wsErr := cfgStore.GetWindowState()
 	if wsErr != nil {
@@ -508,6 +516,25 @@ func (a *App) SetCloseToTray(enabled bool) error {
 	return nil
 }
 
+// GetSmartRAMSaver returns whether smart RAM saver is enabled.
+func (a *App) GetSmartRAMSaver() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.smartRAMSaver
+}
+
+// SetSmartRAMSaver updates and persists the smart RAM saver preference.
+func (a *App) SetSmartRAMSaver(enabled bool) error {
+	a.mu.Lock()
+	a.smartRAMSaver = enabled
+	a.mu.Unlock()
+
+	if a.configStore != nil {
+		return a.configStore.SetSmartRAMSaver(enabled)
+	}
+	return nil
+}
+
 // noteWindowGeometry records the latest known window geometry and persists it
 // after a short quiet period, so dragging or resizing the window does not
 // hammer the config file. Called from the geometry polling loop
@@ -729,9 +756,61 @@ func (a *App) startup(ctx context.Context) {
 	// Auto updater runs in the background; it never blocks startup and never
 	// downloads anything without the user opting in.
 	go a.updateOnStartup(ctx)
+	// Smart RAM saver periodically trims background sessions when system RAM load is high.
+	go a.smartRAMSaverLoop(ctx)
 	// Position restore happens in the geometry polling loop (windowgeom_*.go):
 	// the window may not be visible yet when OnStartup runs, and the loop
 	// applies the saved position once the window is observable.
+}
+
+func (a *App) smartRAMSaverLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !a.GetSmartRAMSaver() {
+				continue
+			}
+			load, err := procstats.SystemMemoryLoad()
+			if err != nil || load < 70 {
+				continue
+			}
+			a.trimBackgroundSessions()
+		}
+	}
+}
+
+func (a *App) trimBackgroundSessions() {
+	a.mu.Lock()
+	active := a.activeAccount
+	a.mu.Unlock()
+
+	if a.accountSvc == nil {
+		return
+	}
+	accounts, err := a.accountSvc.List()
+	if err != nil {
+		return
+	}
+	layout := a.manager.Layout()
+
+	for _, acc := range accounts {
+		if acc.ID == active {
+			continue
+		}
+		id, err := browser.ParseProfileID(acc.ID)
+		if err != nil {
+			continue
+		}
+		userDataDir := layout.UserDataDir(id)
+		if count, err := procstats.TrimUserDataWorkingSet(userDataDir); err == nil && count > 0 {
+			log.Printf("smart-ram-saver: trimmed %d processes for background account %s (system RAM load >= 70%%)", count, acc.ID)
+		}
+	}
 }
 
 // shutdown is called when the app is closing. It tears down the system tray

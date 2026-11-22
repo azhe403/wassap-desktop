@@ -231,5 +231,35 @@ func TestApp_ActiveAccountPersistenceAndSwitching(t *testing.T) {
 	time.Sleep(1 * time.Second)
 }
 
+func TestSmartRAMSaver(t *testing.T) {
+	tempDir := t.TempDir()
+	dirs := appdirs.Dirs{
+		Data:   filepath.Join(tempDir, "data"),
+		Config: filepath.Join(tempDir, "config"),
+		Cache:  filepath.Join(tempDir, "cache"),
+	}
+	app := New(dirs, false, VersionInfo{})
+
+	// Default should be true
+	if !app.GetSmartRAMSaver() {
+		t.Errorf("expected default SmartRAMSaver to be true, got false")
+	}
+
+	// Change to false
+	if err := app.SetSmartRAMSaver(false); err != nil {
+		t.Fatalf("SetSmartRAMSaver(false) failed: %v", err)
+	}
+	if app.GetSmartRAMSaver() {
+		t.Errorf("expected SmartRAMSaver false, got true")
+	}
+
+	// Re-load in a new app instance to verify persistence
+	app2 := New(dirs, false, VersionInfo{})
+	if app2.GetSmartRAMSaver() {
+		t.Errorf("expected persisted SmartRAMSaver false, got true")
+	}
+}
+
+
 
 
