@@ -41,6 +41,8 @@ type AppConfig struct {
 	UpdateChannel string `json:"updateChannel,omitempty"`
 	// PrivacyBlur is the privacy blur section; nil when never written.
 	PrivacyBlur *PrivacyBlurConfig `json:"privacyBlur,omitempty"`
+	// SmartRAMSaver enables periodic background RAM trimming when system memory is high. Default true.
+	SmartRAMSaver *bool `json:"smartRAMSaver,omitempty"`
 }
 
 // PrivacyBlurConfig holds the privacy blur settings. Its keys intentionally
@@ -126,6 +128,8 @@ type Store interface {
 	GetActiveAccount() (string, error)
 	SetCloseToTray(enabled bool) error
 	GetCloseToTray() (bool, error)
+	SetSmartRAMSaver(enabled bool) error
+	GetSmartRAMSaver() (bool, error)
 	SetWindowState(state WindowState) error
 	GetWindowState() (*WindowState, error)
 	SetAutoUpdate(enabled bool) error
@@ -269,6 +273,24 @@ func (s *JSONStore) GetCloseToTray() (bool, error) {
 		return false, err
 	}
 	return cfg.CloseToTray, nil
+}
+
+// SetSmartRAMSaver updates and persists the smart RAM saver preference.
+func (s *JSONStore) SetSmartRAMSaver(enabled bool) error {
+	return s.update(func(cfg *AppConfig) { cfg.SmartRAMSaver = &enabled })
+}
+
+// GetSmartRAMSaver loads and returns the smart RAM saver preference.
+// Defaults to true when unset.
+func (s *JSONStore) GetSmartRAMSaver() (bool, error) {
+	cfg, err := s.Load()
+	if err != nil {
+		return true, err
+	}
+	if cfg.SmartRAMSaver == nil {
+		return true, nil
+	}
+	return *cfg.SmartRAMSaver, nil
 }
 
 // UpdateChannels are the update channels the app understands.

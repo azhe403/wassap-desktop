@@ -214,6 +214,46 @@ func TestJSONStore_WindowStatePreservesOtherFields(t *testing.T) {
 	}
 }
 
+func TestJSONStore_SmartRAMSaver(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	store := config.NewStore(configPath)
+
+	// Default should be true when file doesn't exist
+	val, err := store.GetSmartRAMSaver()
+	if err != nil {
+		t.Fatalf("GetSmartRAMSaver() default failed: %v", err)
+	}
+	if !val {
+		t.Errorf("expected default true, got false")
+	}
+
+	// Disable it
+	if err := store.SetSmartRAMSaver(false); err != nil {
+		t.Fatalf("SetSmartRAMSaver(false) failed: %v", err)
+	}
+	val, err = store.GetSmartRAMSaver()
+	if err != nil {
+		t.Fatalf("GetSmartRAMSaver() failed: %v", err)
+	}
+	if val {
+		t.Errorf("expected false, got true")
+	}
+
+	// Re-enable it
+	if err := store.SetSmartRAMSaver(true); err != nil {
+		t.Fatalf("SetSmartRAMSaver(true) failed: %v", err)
+	}
+	val, err = store.GetSmartRAMSaver()
+	if err != nil {
+		t.Fatalf("GetSmartRAMSaver() failed: %v", err)
+	}
+	if !val {
+		t.Errorf("expected true, got false")
+	}
+}
+
+
 func TestJSONStore_WindowStateOmittedFromJSONUntilSet(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.json")
