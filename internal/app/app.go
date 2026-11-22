@@ -443,6 +443,27 @@ func (a *App) SwitchAccount(accountID string) error {
 		if err := a.manager.HideSession(current); err != nil {
 			log.Printf("switch: hiding %q failed: %v", current, err)
 		}
+		if a.GetSmartRAMSaver() && !a.isQuitting() {
+			go func(profileID string) {
+				time.Sleep(300 * time.Millisecond)
+				if a.isQuitting() {
+					return
+				}
+				log.Printf("switch: smart RAM saver: reloading background session %q silently", profileID)
+				if err := a.manager.Close(profileID); err != nil {
+					log.Printf("switch: background close of %q failed: %v", profileID, err)
+					return
+				}
+				if a.isQuitting() {
+					return
+				}
+				if err := a.manager.Open(profileID); err != nil {
+					log.Printf("switch: background re-open of %q failed: %v", profileID, err)
+				} else {
+					log.Printf("switch: background re-open of %q completed", profileID)
+				}
+			}(current)
+		}
 	}
 
 	// 3. Ensure the native parent window is attached before embedding
@@ -498,10 +519,17 @@ func (a *App) NotifyWindowResize(width, height int) error {
 }
 
 // GetCloseToTray returns whether the app should minimize to tray on window close.
+// GetCloseToTray returns whether the app should minimize to tray on window close.
 func (a *App) GetCloseToTray() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.closeToTray
+}
+
+func (a *App) isQuitting() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.quitting
 }
 
 // SetCloseToTray updates and persists the close-to-tray preference.
