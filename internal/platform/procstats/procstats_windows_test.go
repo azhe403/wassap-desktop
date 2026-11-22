@@ -43,3 +43,19 @@ func TestSnapshotSmoke(t *testing.T) {
 	}
 	t.Logf("webview processes with EBWebView user-data-dir: %d", bridges)
 }
+
+func TestTrimProcessWorkingSet(t *testing.T) {
+	selfPID, _, _ := SelfStats()
+	if err := TrimProcessWorkingSet(selfPID); err != nil {
+		t.Fatalf("TrimProcessWorkingSet(selfPID) failed: %v", err)
+	}
+
+	count, err := TrimUserDataWorkingSet("")
+	if err != nil {
+		t.Fatalf("TrimUserDataWorkingSet(\"\") returned error: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 trimmed processes for empty dir, got %d", count)
+	}
+}
+

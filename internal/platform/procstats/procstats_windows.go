@@ -33,6 +33,7 @@ var (
 	psapi                         = windows.NewLazySystemDLL("psapi.dll")
 	procNtQueryInformationProcess = ntdll.NewProc("NtQueryInformationProcess")
 	procGetProcessMemoryInfo      = psapi.NewProc("GetProcessMemoryInfo")
+	procEmptyWorkingSet           = psapi.NewProc("EmptyWorkingSet")
 )
 
 const (
@@ -204,3 +205,48 @@ func readWorkingSet(h windows.Handle) uint64 {
 	}
 	return uint64(pmc.workingSetSize)
 }
+
+// TrimProcessWorkingSet empties as many pages as possible from the process working set.
+func TrimProcessWorkingSet(pid uint32) error {
+	const (
+		processSetQuota          = 0x0100
+		processQueryInformation  = 0x0400
+	)
+	h, err := windows.OpenProcess(processSetQuota|processQueryInformation, false, pid)
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(h)
+	r, _, err := procEmptyWorkingSet.Call(uintptr(h))
+	if r == 0 {
+		return err
+	}
+	return nil
+}
+
+// TrimUserDataWorkingSet finds all webview processes attributed to the given user data directory
+// and trims their working sets. Returns the number of processes trimmed.
+func TrimUserDataWorkingSet(userDataDir string) (int, error) {
+	if userDataDir == "" {
+		return 0, nil
+	}
+	normTarget := strings.ToLower(filepath.Clean(userDataDir))
+	snap, err := Snapshot()
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, p := range snap {
+		if p.Name != "msedgewebview2.exe" {
+			continue
+		}
+		cmd := strings.ToLower(filepath.Clean(p.CommandLine))
+		if strings.Contains(cmd, normTarget) {
+			if err := TrimProcessWorkingSet(p.PID); err == nil {
+				count++
+			}
+		}
+	}
+	return count, nil
+}
+
