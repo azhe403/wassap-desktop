@@ -44,6 +44,7 @@ import (
 	"github.com/wailsapp/go-webview2/webviewloader"
 
 	"wassap-desktop/internal/browser"
+	"wassap-desktop/internal/platform/procstats"
 )
 
 // ErrNoRuntime is returned by CheckRuntime when WebView2 is not installed.
@@ -606,6 +607,14 @@ func (s *Session) Hide() error {
 			if err := s.chromium.Hide(); err != nil {
 				log.Printf("webview2: cannot mark controller hidden for %s: %v", s.profile, err)
 			}
+		}
+		if s.path != "" {
+			go func(dir string, profile browser.ProfileID) {
+				time.Sleep(500 * time.Millisecond)
+				if count, err := procstats.TrimUserDataWorkingSet(dir); err == nil && count > 0 {
+					log.Printf("webview2: trimmed working set for %s (%d processes)", profile, count)
+				}
+			}(s.path, s.profile)
 		}
 		return nil
 	})
