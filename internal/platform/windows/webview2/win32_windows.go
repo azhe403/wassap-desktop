@@ -288,6 +288,11 @@ func (s *Session) setUpWebView() error {
 	}
 	c.SetErrorCallback(report)
 	c.DataPath = s.path
+	c.AdditionalBrowserArgs = []string{
+		"--enable-low-end-device-mode",
+		"--js-flags=--max-old-space-size=384",
+		"--renderer-process-limit=1",
+	}
 	// WhatsApp Web raises desktop alerts through the Web Notification API.
 	// WebView2 resolves an unset permission state to deny for notifications,
 	// so without an explicit allow the notification API never fires and no
