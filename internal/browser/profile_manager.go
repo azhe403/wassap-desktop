@@ -696,7 +696,7 @@ func fileExists(path string) bool {
 // directories on disk are the source of truth, so a lost or corrupt manifest
 // never loses a session.
 type manifest struct {
-	Version  int                 `json:"version"`
+	Version  int                      `json:"version"`
 	Profiles map[string]manifestEntry `json:"profiles"`
 }
 

@@ -85,32 +85,33 @@ func (a *App) GetResourceUsage() ResourceUsage {
 	perAccount := map[string]*sums{}
 	appWS := selfWS
 	appCPU := cpuPercent(selfPID, selfTicks)
+	dataRoot := normalizePath(a.dirs.Data)
 
 	current := map[uint32]uint64{selfPID: selfTicks}
 	for _, p := range snap {
+		if p.PID == selfPID {
+			// Already folded in through SelfStats; counting the sampled entry
+			// again would report the app's own working set twice.
+			continue
+		}
 		current[p.PID] = p.CPUTicks
-		attributed := ""
-		cmd := normalizePath(p.CommandLine)
-		if cmd != "" {
-			for dir, id := range userDataByAccount {
-				if strings.Contains(cmd, dir) {
-					attributed = id
-					break
-				}
-			}
+		id, ours := classifyProcessLine(p.CommandLine, dataRoot, userDataByAccount)
+		if !ours {
+			// Windows and other applications run msedgewebview2.exe as well;
+			// their engines are not part of this app's footprint.
+			continue
 		}
 		cpu := cpuPercent(p.PID, p.CPUTicks)
-		if attributed == "" {
-			// WebView2 engine not tied to an account profile: the shell's own
-			// UI engine. It counts toward the app bucket.
+		if id == "" {
+			// This app's own UI engine (the shell's WebView2 session).
 			appWS += p.WorkingSetBytes
 			appCPU += cpu
 			continue
 		}
-		s := perAccount[attributed]
+		s := perAccount[id]
 		if s == nil {
 			s = &sums{}
-			perAccount[attributed] = s
+			perAccount[id] = s
 		}
 		s.ws += p.WorkingSetBytes
 		s.cpu += cpu
@@ -146,4 +147,25 @@ func normalizePath(s string) string {
 	s = strings.ToLower(s)
 	s = strings.ReplaceAll(s, "/", `\`)
 	return s
+}
+
+// classifyProcessLine decides what a sampled process belongs to.
+//
+//	(id != "", true)  a profile's engine: the account id
+//	("", true)        this app's own engine (shell UI)
+//	("", false)       not ours at all; leave it out of every total
+func classifyProcessLine(commandLine, dataRoot string, userDataByAccount map[string]string) (string, bool) {
+	cmd := normalizePath(commandLine)
+	if cmd == "" {
+		return "", false
+	}
+	for dir, id := range userDataByAccount {
+		if strings.Contains(cmd, dir) {
+			return id, true
+		}
+	}
+	if dataRoot != "" && strings.Contains(cmd, dataRoot) {
+		return "", true
+	}
+	return "", false
 }

@@ -113,9 +113,9 @@ func (f *fakeApplier) Purge(path string) error {
 
 // fakeOpener records the Probe it was handed and reports clean exits.
 type fakeOpener struct {
-	probe   Probe
-	calls   int
-	fails   bool
+	probe Probe
+	calls int
+	fails bool
 }
 
 func (o *fakeOpener) OpenProfile(id ProfileID, p Probe) (Session, error) {
@@ -133,14 +133,14 @@ type fakeSession struct {
 	clo int
 }
 
-func (s *fakeSession) Profile() ProfileID            { return s.id }
-func (s *fakeSession) Path() string                  { return s.p.Path }
-func (s *fakeSession) Outcome() Outcome               { return OpenedClean }
-func (s *fakeSession) Show() error                    { return nil }
-func (s *fakeSession) Hide() error                    { return nil }
-func (s *fakeSession) Focus() error                   { return nil }
-func (s *fakeSession) Alive() bool                    { return s.clo == 0 }
-func (s *fakeSession) Close() error { s.clo++; return nil }
+func (s *fakeSession) Profile() ProfileID { return s.id }
+func (s *fakeSession) Path() string       { return s.p.Path }
+func (s *fakeSession) Outcome() Outcome   { return OpenedClean }
+func (s *fakeSession) Show() error        { return nil }
+func (s *fakeSession) Hide() error        { return nil }
+func (s *fakeSession) Focus() error       { return nil }
+func (s *fakeSession) Alive() bool        { return s.clo == 0 }
+func (s *fakeSession) Close() error       { s.clo++; return nil }
 
 // newTestManager wires a Manager to the fakes, with a t.TempDir layout.
 func newTestManager(t *testing.T) (*Manager, *fakeApplier, *fakeOpener, map[string]bool) {
@@ -169,15 +169,15 @@ func TestParseProfileID_Valid(t *testing.T) {
 
 func TestParseProfileID_Invalid(t *testing.T) {
 	for _, in := range []string{
-		"",       // empty
-		"AB",     // uppercase
-		"a/b",    // path separator
-		"..",     // parent reference
-		"a b",    // space
-		"a\\b",   // windows separator
-		"nul",    // reserved
-		"CON",    // reserved upper
-		"a\tb",   // control char
+		"",     // empty
+		"AB",   // uppercase
+		"a/b",  // path separator
+		"..",   // parent reference
+		"a b",  // space
+		"a\\b", // windows separator
+		"nul",  // reserved
+		"CON",  // reserved upper
+		"a\tb", // control char
 	} {
 		if _, err := ParseProfileID(in); err == nil {
 			t.Errorf("ParseProfileID(%q) = nil error, want error", in)
@@ -323,8 +323,8 @@ type fakeShowHideSession struct {
 	showCalls []ProfileID
 }
 
-func (s *fakeShowHideSession) Hide() error  { s.hideCalls = append(s.hideCalls, s.id); return nil }
-func (s *fakeShowHideSession) Show() error  { s.showCalls = append(s.showCalls, s.id); return nil }
+func (s *fakeShowHideSession) Hide() error { s.hideCalls = append(s.hideCalls, s.id); return nil }
+func (s *fakeShowHideSession) Show() error { s.showCalls = append(s.showCalls, s.id); return nil }
 
 type showHideOpener struct {
 	sessions map[ProfileID]*fakeShowHideSession
