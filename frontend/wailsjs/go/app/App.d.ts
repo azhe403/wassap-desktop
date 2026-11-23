@@ -35,6 +35,8 @@ export function GetPrivacyBlurSettings():Promise<config.PrivacyBlurConfig>;
 
 export function GetResourceUsage():Promise<app.ResourceUsage>;
 
+export function GetSmartRAMSaver():Promise<boolean>;
+
 export function GetUpdateChannel():Promise<string>;
 
 export function GetUpdateStatus():Promise<app.UpdateStatus>;
@@ -68,6 +70,8 @@ export function SetAutoUpdate(arg1:boolean):Promise<void>;
 export function SetCloseToTray(arg1:boolean):Promise<void>;
 
 export function SetPrivacyBlurSettings(arg1:config.PrivacyBlurConfig):Promise<void>;
+
+export function SetSmartRAMSaver(arg1:boolean):Promise<void>;
 
 export function SetUpdateChannel(arg1:string):Promise<void>;
 

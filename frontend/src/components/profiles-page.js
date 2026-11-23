@@ -2,9 +2,23 @@ import { getInitials, getAvatarColor } from '../utils/avatar.js';
 import { avatarImageHTML } from '../utils/avatar-image.js';
 
 /**
+ * Selected account survives re-renders within the session, mirroring how the
+ * Settings page keeps its active panel.
+ */
+let selectedProfileId = null;
+
+/**
+ * Last samples seen by the page, kept so a re-paint (selecting another
+ * account) shows real numbers immediately instead of placeholders.
+ */
+let lastUsage = null;
+const diskBytesByAccount = new Map();
+const storageInfoByAccount = new Map();
+
+/**
  * Renders the full-page Profile Management view inside #content-view.
- * Lists every account with its on-disk profile storage and per-account
- * Rename / Remove / Inspect actions.
+ * Layout mirrors the Settings page: a fixed header, an account list on the
+ * left, and a scrollable detail panel on the right.
  *
  * @param {HTMLElement} container
  * @param {Array} accounts - [{ id, name, createdAt }]
@@ -13,51 +27,124 @@ import { avatarImageHTML } from '../utils/avatar-image.js';
  * @param {Object} avatars - account id -> profile photo data URI
  */
 export function renderProfilesPage(container, accounts, activeId, handlers = {}, avatars = {}) {
-    container.innerHTML = `
-        <div class="settings-page-view profiles-page-view" role="region" aria-label="Profile Management">
-            <div class="settings-page-header">
-                <h2 class="settings-page-title">Profile Management</h2>
-                <p class="settings-page-subtitle">Rename, remove and inspect your account profiles. Each account keeps its own isolated browser storage.</p>
-            </div>
-            <div class="profiles-total-usage" id="profiles-total-usage">Reading resource usage…</div>
+    const list = Array.isArray(accounts) ? accounts : [];
 
-            ${accounts.length === 0 ? `
-                <p class="profiles-empty">No accounts yet. Add one with the ➕ button in the sidebar.</p>
-            ` : `
-                <div class="profiles-list">
-                    ${accounts.map(acc => renderCard(acc, activeId, avatars)).join('')}
+    if (list.length === 0) {
+        selectedProfileId = null;
+    } else if (!list.some(acc => acc.id === selectedProfileId)) {
+        // Prefer the account currently on screen, otherwise the first one.
+        selectedProfileId = list.some(acc => acc.id === activeId) ? activeId : list[0].id;
+    }
+
+    const paint = () => {
+        const selected = list.find(acc => acc.id === selectedProfileId) || null;
+
+        container.innerHTML = `
+            <div class="settings-page-view profiles-page-view" role="region" aria-label="Profile Management">
+                <div class="settings-page-header">
+                    <h2 class="settings-page-title">Profile Management</h2>
+                    <p class="settings-page-subtitle">Rename, remove and inspect your account profiles. Each account keeps its own isolated browser storage.</p>
                 </div>
-            `}
-        </div>
-    `;
 
-    // Wire per-card actions
-    accounts.forEach(acc => {
-        const card = container.querySelector(`.profile-mgmt-card[data-id="${escapeAttr(acc.id)}"]`);
-        if (!card) return;
+                <div class="profiles-total-usage" id="profiles-total-usage">Reading resource usage…</div>
 
-        const renameBtn = card.querySelector('.btn-rename');
-        if (renameBtn && handlers.onRename) {
-            renameBtn.addEventListener('click', () => handlers.onRename(acc));
+                ${list.length === 0 ? `
+                    <p class="profiles-empty">No accounts yet. Add one with the ➕ button in the sidebar.</p>
+                ` : `
+                    <div class="settings-shell profiles-shell">
+                        <nav class="settings-nav profiles-nav" aria-label="Accounts">
+                            ${list.map(acc => renderNavItem(acc, activeId, avatars)).join('')}
+                        </nav>
+                        <div class="settings-panels profiles-panels">
+                            ${selected ? renderDetail(selected, activeId, avatars) : ''}
+                        </div>
+                    </div>
+                `}
+            </div>
+        `;
+
+        // Account list: selecting one swaps the detail panel.
+        container.querySelectorAll('.profile-nav-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectedProfileId = btn.getAttribute('data-id');
+                paint();
+            });
+        });
+
+        const card = container.querySelector('.profile-mgmt-card');
+        if (card && selected) {
+            const renameBtn = card.querySelector('.btn-rename');
+            if (renameBtn && handlers.onRename) {
+                renameBtn.addEventListener('click', () => handlers.onRename(selected));
+            }
+
+            const removeBtn = card.querySelector('.btn-remove');
+            if (removeBtn && handlers.onRemove) {
+                removeBtn.addEventListener('click', () => handlers.onRemove(selected));
+            }
+
+            const inspectBtn = card.querySelector('.btn-inspect');
+            if (inspectBtn) {
+                inspectBtn.addEventListener('click', () => toggleInspect(card, selected.id));
+            }
         }
 
-        const removeBtn = card.querySelector('.btn-remove');
-        if (removeBtn && handlers.onRemove) {
-            removeBtn.addEventListener('click', () => handlers.onRemove(acc));
-        }
+        // Fill in storage stats asynchronously; ListProfiles walks each profile's
+        // user data folder, so it must not block the first paint.
+        loadStorageSummaries(container, list);
 
-        const inspectBtn = card.querySelector('.btn-inspect');
-        if (inspectBtn) {
-            inspectBtn.addEventListener('click', () => toggleInspect(card, acc.id));
-        }
-    });
+        // Re-paints rebuild the markup; put the last sample back immediately so
+        // the page never flashes "Reading…" after a click.
+        applyUsage();
+        applyStorage();
+    };
 
-    // Fill in storage stats asynchronously; ListProfiles walks each profile's
-    // user data folder, so it must not block the first paint.
-    loadStorageSummaries(container);
+    paint();
 }
 
-function renderCard(acc, activeId, avatars = {}) {
+function renderNavItem(acc, activeId, avatars = {}) {
+    const color = getAvatarColor(acc.id || acc.name);
+    const initials = getInitials(acc.name);
+    const isSelected = acc.id === selectedProfileId;
+    const isActive = acc.id === activeId;
+
+    return `
+        <button
+            type="button"
+            class="settings-nav-item profile-nav-item ${isSelected ? 'active' : ''}"
+            data-id="${escapeAttr(acc.id)}"
+            aria-current="${isSelected ? 'true' : 'false'}"
+        >
+            <span class="profile-nav-avatar" style="background-color: ${color.bg}; color: ${color.fg};">
+                <span>${escapeHTML(initials)}</span>
+                ${avatarImageHTML(acc.id, avatars, '', 'account-avatar-static-img')}
+            </span>
+            <span class="profile-nav-text">
+                <span class="profile-nav-name">${escapeHTML(acc.name)}</span>
+                <span class="profile-nav-metrics" data-nav-metrics-for="${escapeAttr(acc.id)}">${navMetricsHTML(acc.id)}</span>
+            </span>
+            ${isActive ? '<span class="profile-nav-dot" title="Currently open"></span>' : ''}
+        </button>
+    `;
+}
+
+/** Compact CPU / RAM / disk line for one account, from the cached samples. */
+function navMetricsHTML(accountId) {
+    const profile = ((lastUsage && lastUsage.profiles) || []).find(p => p.id === accountId);
+    const disk = diskBytesByAccount.get(accountId);
+
+    const ram = profile && profile.running ? formatUsageBytes(profile.workingSetBytes) : '—';
+    const cpu = profile && profile.running ? `${profile.cpuPercent.toFixed(1)}%` : '—';
+    const diskLabel = disk === undefined ? '…' : formatBytes(disk);
+
+    return `
+        <span class="nav-metric" title="CPU in use"><span class="nav-metric-label">CPU</span>${escapeHTML(cpu)}</span>
+        <span class="nav-metric" title="Memory in use"><span class="nav-metric-label">RAM</span>${escapeHTML(ram)}</span>
+        <span class="nav-metric" title="Profile size on disk"><span class="nav-metric-label">Disk</span>${escapeHTML(diskLabel)}</span>
+    `;
+}
+
+function renderDetail(acc, activeId, avatars = {}) {
     const color = getAvatarColor(acc.id || acc.name);
     const initials = getInitials(acc.name);
     const isActive = acc.id === activeId;
@@ -77,39 +164,65 @@ function renderCard(acc, activeId, avatars = {}) {
                         ${isActive ? '<span class="profile-state-badge open">Active</span>' : ''}
                     </div>
                     <div class="profile-mgmt-meta">Created ${escapeHTML(createdLabel)}</div>
-                    <div class="profile-mgmt-storage" data-storage-for="${escapeAttr(acc.id)}">Reading storage…</div>
-                    <div class="profile-mgmt-resources" data-resources-for="${escapeAttr(acc.id)}">Reading usage…</div>
                 </div>
             </div>
+
+            <div class="profile-mgmt-facts">
+                <div class="profile-mgmt-storage" data-storage-for="${escapeAttr(acc.id)}">Reading storage…</div>
+                <div class="profile-mgmt-resources" data-resources-for="${escapeAttr(acc.id)}">Reading usage…</div>
+            </div>
+
             <div class="profile-mgmt-actions">
                 <button type="button" class="btn-secondary btn-small btn-rename">Rename</button>
                 <button type="button" class="btn-secondary btn-small btn-inspect">Inspect</button>
                 <button type="button" class="btn-danger btn-small btn-remove" ${isActive ? 'disabled title="Switch to another account first"' : ''}>Remove</button>
             </div>
+
             <div class="profile-mgmt-evidence" hidden></div>
         </div>
     `;
 }
 
-async function loadStorageSummaries(container) {
+async function loadStorageSummaries(container, accounts) {
     const api = window.go && window.go.app && window.go.app.App;
     if (!api || !api.ListProfiles) return;
 
     try {
         const profiles = await api.ListProfiles();
-        const byId = new Map((profiles || []).map(p => [p.id || p.ID, p]));
-
-        container.querySelectorAll('.profile-mgmt-storage').forEach(el => {
-            const id = el.getAttribute('data-storage-for');
-            const info = byId.get(id);
-            el.innerHTML = renderStorage(info);
+        (profiles || []).forEach(p => {
+            const id = p.id || p.ID;
+            storageInfoByAccount.set(id, p);
+            const storage = p.storage || {};
+            const bytes = storage.persisted ? (storage.bytes || 0) : 0;
+            diskBytesByAccount.set(id, bytes);
         });
+
+        applyStorage();
     } catch (err) {
         console.error('Failed to load profile storage info:', err);
         container.querySelectorAll('.profile-mgmt-storage').forEach(el => {
             el.textContent = 'Storage info unavailable';
         });
     }
+}
+
+/**
+ * Writes the cached storage summary into the current DOM. Like applyUsage,
+ * this runs at the end of every paint so switching accounts does not flash the
+ * "Reading storage…" placeholder.
+ */
+function applyStorage() {
+    document.querySelectorAll('.profile-mgmt-storage').forEach(el => {
+        const id = el.getAttribute('data-storage-for');
+        if (!storageInfoByAccount.has(id)) return;
+        el.innerHTML = renderStorage(storageInfoByAccount.get(id));
+    });
+
+    document.querySelectorAll('.profile-nav-metrics').forEach(el => {
+        const id = el.getAttribute('data-nav-metrics-for');
+        if (!diskBytesByAccount.has(id)) return;
+        el.innerHTML = navMetricsHTML(id);
+    });
 }
 
 function renderStorage(info) {
@@ -200,11 +313,29 @@ function formatBytes(bytes) {
  */
 export function updateProfilesUsage(usage) {
     if (!usage) return;
+    lastUsage = usage;
+    applyUsage();
+}
+
+/**
+ * Writes the cached sample into whatever DOM is currently on screen. Every
+ * re-paint (selecting another account) rebuilds the markup, so this runs at the
+ * end of each paint as well: without it the totals and the detail line would
+ * fall back to their placeholders until the next poll tick.
+ */
+function applyUsage() {
+    const usage = lastUsage;
+    if (!usage) return;
 
     const totalEl = document.getElementById('profiles-total-usage');
     if (totalEl) {
         totalEl.innerHTML = `Wassap Desktop total&nbsp; <strong>${formatUsageBytes(usage.totalWorkingSetBytes)} RAM</strong> · <strong>${usage.totalCPUPercent.toFixed(1)}% CPU</strong>`;
     }
+
+    // Compact CPU / RAM / disk line under every account in the left-hand list.
+    document.querySelectorAll('.profile-nav-metrics').forEach(el => {
+        el.innerHTML = navMetricsHTML(el.getAttribute('data-nav-metrics-for'));
+    });
 
     const sep = '<span class="profile-storage-sep">·</span>';
     document.querySelectorAll('.profile-mgmt-resources').forEach(el => {

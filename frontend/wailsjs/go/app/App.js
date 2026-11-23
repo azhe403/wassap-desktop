@@ -62,6 +62,10 @@ export function GetResourceUsage() {
   return window['go']['app']['App']['GetResourceUsage']();
 }
 
+export function GetSmartRAMSaver() {
+  return window['go']['app']['App']['GetSmartRAMSaver']();
+}
+
 export function GetUpdateChannel() {
   return window['go']['app']['App']['GetUpdateChannel']();
 }
@@ -128,6 +132,10 @@ export function SetCloseToTray(arg1) {
 
 export function SetPrivacyBlurSettings(arg1) {
   return window['go']['app']['App']['SetPrivacyBlurSettings'](arg1);
+}
+
+export function SetSmartRAMSaver(arg1) {
+  return window['go']['app']['App']['SetSmartRAMSaver'](arg1);
 }
 
 export function SetUpdateChannel(arg1) {
