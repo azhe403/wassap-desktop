@@ -36,6 +36,8 @@ func (s *stubHost) SetPrivacyDelegate(prelude func() string, apply func() string
 
 func (s *stubHost) SetAvatarDelegate(func(browser.ProfileID, string)) {}
 
+func (s *stubHost) SetSmartRAMSaver(enabled bool) {}
+
 type stubInspector struct{}
 
 func (s *stubInspector) Inspect(id browser.ProfileID) ([]browser.Evidence, error) {

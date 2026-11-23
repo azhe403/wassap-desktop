@@ -22,9 +22,9 @@ type fakeHost struct {
 func (f *fakeHost) OpenProfile(id browser.ProfileID, probe browser.Probe) (browser.Session, error) {
 	return nil, errors.New("fakeHost: not implemented")
 }
-func (f *fakeHost) CloseAll() error                 { return nil }
-func (f *fakeHost) UpdateBounds(width, height int) error { return nil }
-func (f *fakeHost) SetVisible(visible bool) error   { return nil }
+func (f *fakeHost) CloseAll() error                       { return nil }
+func (f *fakeHost) UpdateBounds(width, height int) error  { return nil }
+func (f *fakeHost) SetVisible(visible bool) error         { return nil }
 func (f *fakeHost) SetActiveSession(id browser.ProfileID) {}
 func (f *fakeHost) EvalAll(script string) {
 	f.mu.Lock()
@@ -35,6 +35,8 @@ func (f *fakeHost) SetPrivacyDelegate(prelude func() string, apply func() string
 }
 
 func (f *fakeHost) SetAvatarDelegate(func(browser.ProfileID, string)) {}
+
+func (f *fakeHost) SetSmartRAMSaver(bool) {}
 
 func (f *fakeHost) last() string {
 	f.mu.Lock()

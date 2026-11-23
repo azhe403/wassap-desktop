@@ -37,6 +37,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -118,7 +119,16 @@ type Host struct {
 
 	mu       sync.Mutex
 	sessions map[*Session]struct{}
+
+	// smartRAMSaver controls whether new sessions get low-memory Chromium flags.
+	smartRAMSaver atomic.Bool
 }
+
+// SetSmartRAMSaver updates whether new WebView2 sessions start with low-memory flags.
+func (h *Host) SetSmartRAMSaver(enabled bool) { h.smartRAMSaver.Store(enabled) }
+
+// SmartRAMSaverEnabled reports whether new sessions should get low-memory flags.
+func (h *Host) SmartRAMSaverEnabled() bool { return h.smartRAMSaver.Load() }
 
 // ParentHandle returns the main window handle the sessions are embedded in,
 // or zero when sessions run as standalone top-level windows.
