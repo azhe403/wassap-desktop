@@ -31,7 +31,7 @@ func (f *fakeHost) EvalAll(script string) {
 	f.broadcasts = append(f.broadcasts, script)
 	f.mu.Unlock()
 }
-func (f *fakeHost) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {
+func (f *fakeHost) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any)) {
 }
 
 func (f *fakeHost) SetAvatarDelegate(func(browser.ProfileID, string)) {}

@@ -21,13 +21,16 @@ const (
 // Status is what the UI needs to decide what to show. It is JSON-marshaled
 // into the `update:status` Wails event verbatim.
 type Status struct {
-	State           State     `json:"state"`
-	Channel         string    `json:"channel"`
-	CurrentVersion  string    `json:"currentVersion"`
-	LatestVersion   string    `json:"latestVersion"`
-	ReleaseURL      string    `json:"releaseURL"`
-	Message         string    `json:"message,omitempty"`
-	CheckedAt       time.Time `json:"checkedAt"`
+	State          State     `json:"state"`
+	Channel        string    `json:"channel"`
+	CurrentVersion string    `json:"currentVersion"`
+	LatestVersion  string    `json:"latestVersion"`
+	ReleaseURL     string    `json:"releaseURL"`
+	Message        string    `json:"message,omitempty"`
+	CheckedAt      time.Time `json:"checkedAt"`
+	// LatestBuildDate is the available release's GitHub publish time (UTC),
+	// used as the build-date proxy beside the installed binary's CI stamp.
+	// Zero means unknown. The cache stores the same value as PublishedAt.
 	LatestBuildDate time.Time `json:"latestBuildDate"`
 	Dismissed       bool      `json:"dismissed"`
 }

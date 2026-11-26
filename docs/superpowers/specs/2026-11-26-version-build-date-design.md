@@ -41,7 +41,7 @@ The updater already stamps a version (`vX.Y.Z` for tags, `0.0.0-nightly.<sha7>` 
     Installed   v0.1.0                   built 15 Nov 2026 06:03 UTC
     Available   0.0.0-nightly.a1b2c3d    published 26 Nov 2026 08:12 UTC
     ```
-    Dates are formatted client-side from RFC3339 with a fixed UTC suffix; missing dates render `date unavailable`. The existing status-line sentence and buttons remain unchanged. Use the existing `app.css` tokens and the row's typography; no new colors, no cards, no icons.
+    Dates are formatted client-side from RFC3339 with a fixed UTC suffix; missing dates render `date unavailable`. The existing status-line sentences and buttons remain unchanged, except the `unsupported` sentence: `cf323bf` intentionally clarifies it to "This is a development build. Install a release from GitHub to enable updates." (`StateUnsupported` is emitted only when the build lacks a version/commit stamp, so the sentence is accurate.) Use the existing `app.css` tokens and the row's typography; no new colors, no cards, no icons.
 - **Docs**: README's "Updating" section gets one line about where version/build date are shown; the 2026-11-15 auto-updater spec gets a short note recording the added stamp and status field (living-doc obligation).
 
 ## Verification

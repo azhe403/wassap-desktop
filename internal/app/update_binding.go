@@ -42,36 +42,40 @@ type VersionInfo struct {
 // UpdateStatus is the JSON contract between the updater and the frontend
 // (bindings and the `update:status` Wails event).
 type UpdateStatus struct {
-	State           string `json:"state"`
-	Channel         string `json:"channel"`
-	CurrentVersion  string `json:"currentVersion"`
-	LatestVersion   string `json:"latestVersion"`
-	ReleaseURL      string `json:"releaseURL"`
-	Message         string `json:"message,omitempty"`
-	CheckedAt       string `json:"checkedAt,omitempty"`
+	State          string `json:"state"`
+	Channel        string `json:"channel"`
+	CurrentVersion string `json:"currentVersion"`
+	LatestVersion  string `json:"latestVersion"`
+	ReleaseURL     string `json:"releaseURL"`
+	Message        string `json:"message,omitempty"`
+	CheckedAt      string `json:"checkedAt,omitempty"`
+	// LatestBuildDate is the available release's publish time (RFC3339 UTC,
+	// empty when unknown). The frontend labels it "published", not "built".
 	LatestBuildDate string `json:"latestBuildDate,omitempty"`
 	ProgressDone    int64  `json:"progressDone,omitempty"`
 	ProgressTotal   int64  `json:"progressTotal,omitempty"`
 	Dismissed       bool   `json:"dismissed"`
 }
 
+func rfc3339OrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
 func statusToUpdateStatus(st updater.Status) UpdateStatus {
-	out := UpdateStatus{
-		State:          string(st.State),
-		Channel:        st.Channel,
-		CurrentVersion: st.CurrentVersion,
-		LatestVersion:  st.LatestVersion,
-		ReleaseURL:     st.ReleaseURL,
-		Message:        st.Message,
-		Dismissed:      st.Dismissed,
+	return UpdateStatus{
+		State:           string(st.State),
+		Channel:         st.Channel,
+		CurrentVersion:  st.CurrentVersion,
+		LatestVersion:   st.LatestVersion,
+		ReleaseURL:      st.ReleaseURL,
+		Message:         st.Message,
+		CheckedAt:       rfc3339OrEmpty(st.CheckedAt),
+		LatestBuildDate: rfc3339OrEmpty(st.LatestBuildDate),
+		Dismissed:       st.Dismissed,
 	}
-	if !st.CheckedAt.IsZero() {
-		out.CheckedAt = st.CheckedAt.UTC().Format(time.RFC3339)
-	}
-	if !st.LatestBuildDate.IsZero() {
-		out.LatestBuildDate = st.LatestBuildDate.UTC().Format(time.RFC3339)
-	}
-	return out
 }
 
 // loadPrefs reads auto-update preference and channel from the config store.
@@ -284,16 +288,7 @@ func (a *App) DismissUpdateNotice(version string) error {
 	}
 	st := a.lastStatusSnapshot()
 	st.Dismissed = version == st.LatestVersion
-	a.setLastStatus(updater.Status{
-		State:          st.State,
-		Channel:        st.Channel,
-		CurrentVersion: st.CurrentVersion,
-		LatestVersion:  st.LatestVersion,
-		ReleaseURL:     st.ReleaseURL,
-		Message:        st.Message,
-		CheckedAt:      st.CheckedAt,
-		Dismissed:      st.Dismissed,
-	})
+	a.setLastStatus(st)
 	a.emitUpdateStatus()
 	return nil
 }

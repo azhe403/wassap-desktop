@@ -114,8 +114,8 @@ The upstream `content.js` keyboard handler flips `enabled` via `chrome.storage.l
 
 `internal/platform/windows/webview2` changes:
 
-- `Host` gains: `Prelude func() string` (set by the app before any session opens; returning "" disables injection), `Apply func() string` (returns a fresh `ExecuteScript` payload that re-applies the current settings for live broadcasts), and `EvalAll(script string)` which marshals `chromium.Eval(script)` through each session's existing `s.call` so the call lands on the session thread, fire-and-forget with the same timeout semantics as everything else.
-- `setUpWebView`: NO `c.Init` for privacy blur (2026-11-26 fix — the async registration loses the first-document race). `NavigationCompletedCallback` evaluates `h.Prelude()` on every successful navigation (the callback already runs on the session's UI thread, so no marshalling is needed; `ExecuteScript` is queued asynchronously). The prelude closure reads `config.json` fresh each call, so the engine installs with current settings on the live DOM. Other sessions are unaffected — only the navigated session re-boots its engine. `Apply` stays for live broadcasts.
+- `Host` gains: `Prelude func() string` (set by the app before any session opens; returning "" disables injection) and `EvalAll(script string)` which marshals `chromium.Eval(script)` through each session's existing `s.call` so the call lands on the session thread, fire-and-forget with the same timeout semantics as everything else. There is no `Apply` host hook: live broadcasts are built by the app with `privacyblur.ApplyScript(...)` and sent through `EvalAll` (§4.4). The earlier `Apply` delegate was removed in the 2026-11-26 review because the navigation fix left it with no callers.
+- `setUpWebView`: NO `c.Init` for privacy blur (2026-11-26 fix — the async registration loses the first-document race). `NavigationCompletedCallback` evaluates `h.Prelude()` on every successful navigation (the callback already runs on the session's UI thread, so no marshalling is needed; `ExecuteScript` is queued asynchronously). The prelude closure reads `config.json` fresh each call, so the engine installs with current settings on the live DOM. Other sessions are unaffected — only the navigated session re-boots its engine. Live setting changes reach every session through the app's `EvalAll`, not through a host `Apply` delegate.
 - `wireNotificationClickMessage` (kept) and a sibling `wirePrivacyBlurMessage(s, c)` share the `MessageCallback` plumbing: messages with `kind == "privacy-blur-set"` call a new `Host.OnPrivacySettingsWrite func(values map[string]any)` hook. Everything else is ignored as today. (One callback slot exists on `Chromium`; the wire function simply routes both kinds. If `OnPrivacySettingsWrite` is nil, the kind is dropped.)
 
 `HostController` in `app.go` gains `EvalAll(script string)`; `app_other.go` gains the matching no-op.
@@ -156,10 +156,10 @@ The upstream `content.js` keyboard handler flips `enabled` via `chrome.storage.l
 
 ## 5. Data flow (happy path)
 
-1. Session setup: WebView2 page created → document-created script runs → adapter seeds `chrome.*` fakes from `window.__WA_PRIVACY_BOOT` → upstream engine reads storage → `applySettings` paints blur CSS before first meaningful frame.
+1. Session setup (2026-11-26 fix): WebView2 page created → `NavigationCompletedCallback` evaluates the full engine with fresh settings → adapter seeds `chrome.*` fakes from `window.__WA_PRIVACY_BOOT` → upstream engine reads storage → `applySettings` paints blur CSS on the complete DOM. A brief unblurred flash until navigation completes is accepted.
 2. User clicks sidebar shield: frontend flips `enabled` on the full settings object it loaded via `GetPrivacyBlurSettings()` → `SetPrivacyBlurSettings(fullObject)` → config saved → `EvalAll("window.__wassapPrivacyApply(...)")` → every open session's DOM updates live; Wails event syncs all windows (settings page if open, sidebar icon).
 3. User hits `Alt+/` inside a session: engine flips `enabled` → fake `set` → postMessage `privacy-blur-set` → `MergePrivacyBlurSettings` (atomic in-store) → host re-broadcasts the merged object to sessions + emits event → sidebar and Settings stay truthful.
-4. User hard-reloads a session (Ctrl+R / crash recovery): the new document boots from `__WA_PRIVACY_BOOT` (current at session start) — if settings changed since, `NavigationCompletedCallback` immediately re-applies the fresh object via `Eval(ApplyScript(...))`.
+4. User hard-reloads a session (Ctrl+R / crash recovery): `NavigationCompletedCallback` evaluates the full prelude with settings read fresh from `config.json`, so the engine installs on the live DOM with current settings — no session-start boot object and no `c.Init` registration to lose the race.
 
 ## 6. Testing & verification
 
@@ -183,7 +183,7 @@ A single coherent feature, roughly 10-14 files, no new dependencies, one new pac
 - Privacy controls do not get their own sidebar entry; they live in Settings + one sidebar footer button.
 - `SetPrivacyBlurSettings` is a full-object replace; the frontend always round-trips the struct from `Get`. (Builder-check finding; alternative merge-patch was rejected — absent JS fields would zero out settings silently.)
 - In-page write path merges via a new atomic `MergePrivacyBlurSettings` store method instead of read-modify-write across calls. (Builder-check finding; otherwise concurrent Alt+/ and Settings saves clobber each other.)
-- Navigation re-apply via `NavigationCompletedCallback` closes the document-created staleness gap; the baked boot prelude stays for first paint. (Builder-check finding.) Upstream vendored at v3.2.0 @ `82cc20e0`; `SYNC.md` records it. Real-WebView2 test suites are flaky on this machine, so tests stay sentinel/deterministic — no gating on spinning a live engine.
+- Navigation re-apply via `NavigationCompletedCallback` closes both the document-created staleness gap and the cold-start race; the full engine is evaluated there with fresh settings, so no baked session-start boot prelude remains to go stale. (Builder-check finding, updated 2026-11-26.) Upstream vendored at v3.2.0 @ `82cc20e0`; `SYNC.md` records it, and `docs/privacy-blur-engine.md` is the maintainer's guide added 2026-11-26 (file map, adaptation boundary and re-sync procedure). Real-WebView2 test suites are flaky on this machine, so tests stay sentinel/deterministic — no gating on spinning a live engine.
 
 ## 9. Out of scope / follow-ups
 

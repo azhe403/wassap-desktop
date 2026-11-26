@@ -31,7 +31,7 @@ func (s *stubHost) SetActiveSession(id browser.ProfileID) {}
 
 func (s *stubHost) EvalAll(script string) {}
 
-func (s *stubHost) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {
+func (s *stubHost) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any)) {
 }
 
 func (s *stubHost) SetAvatarDelegate(func(browser.ProfileID, string)) {}

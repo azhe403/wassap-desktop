@@ -36,7 +36,7 @@ type HostController interface {
 	SetVisible(visible bool) error
 	SetActiveSession(id browser.ProfileID)
 	EvalAll(script string)
-	SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
+	SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any))
 	SetAvatarDelegate(onUpdate func(browser.ProfileID, string))
 	SetSmartRAMSaver(enabled bool)
 }
@@ -156,7 +156,6 @@ func New(dirs appdirs.Dirs, legacyMode bool, build VersionInfo) *App {
 	if app.host != nil {
 		app.host.SetPrivacyDelegate(
 			func() string { return privacyblur.PreludeScript(mustJSON(app.effectivePrivacyBlur())) },
-			func() string { return privacyblur.ApplyScript(mustJSON(app.effectivePrivacyBlur())) },
 			app.handlePrivacyBlurWrite,
 		)
 		app.host.SetAvatarDelegate(app.handleAvatarUpdate)

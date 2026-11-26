@@ -850,6 +850,7 @@ export function renderUpdateStatus(container, s) {
     }
 
     const latest = s.latestVersion || '';
+    const isCompareState = s.state === 'available' || s.state === 'downloaded';
     const pct = s.progressTotal > 0 ? Math.floor((s.progressDone * 100) / s.progressTotal) : null;
     let text = '';
     let tone = '';
@@ -895,7 +896,7 @@ export function renderUpdateStatus(container, s) {
     textEl.classList.toggle('error', tone === 'error');
 
     if (compareEl) {
-        const showCompare = (s.state === 'available' || s.state === 'downloaded') && !!s.latestVersion;
+        const showCompare = isCompareState && !!s.latestVersion;
         compareEl.hidden = !showCompare;
         if (showCompare) {
             const installed = container.querySelector('#update-compare-installed');

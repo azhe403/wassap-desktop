@@ -101,12 +101,11 @@ type Host struct {
 	// not block the session's message pump.
 	OnNotificationClick func(browser.ProfileID)
 	// Privacy delegate hooks. Set once, via SetPrivacyDelegate, before any
-	// session is opened; prelude/apply return document-created and live
-	// re-apply scripts for the vendored upstream engine (empty strings
-	// disable injection). onWrite fires when a page posts a
-	// "privacy-blur-set" message (e.g. Alt+/ inside the page).
+	// session is opened; prelude returns the full engine script evaluated on
+	// each successful navigation (an empty string disables injection). onWrite
+	// fires when a page posts a "privacy-blur-set" message (e.g. Alt+/ inside
+	// the page). Live setting changes are broadcast by the app via EvalAll.
 	prelude        func() string
-	apply          func() string
 	onPrivacyWrite func(map[string]any)
 	// onAvatarUpdate receives data URIs from page avatar messages; an empty
 	// URI means the photo was cleared. Set once at start-up via
@@ -260,24 +259,17 @@ func (h *Host) SetActiveSession(id browser.ProfileID) {
 
 // SetPrivacyDelegate installs the privacy-blur hooks. Called once at start-up,
 // before any session opens. Passing nil for a hook disables it.
-func (h *Host) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {
+func (h *Host) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any)) {
 	h.mu.Lock()
-	h.prelude, h.apply, h.onPrivacyWrite = prelude, apply, onWrite
+	h.prelude, h.onPrivacyWrite = prelude, onWrite
 	h.mu.Unlock()
 }
 
-// privacyPrelude returns the document-created script, or nil.
+// privacyPrelude returns the full engine script for one session, or nil.
 func (h *Host) privacyPrelude() func() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.prelude
-}
-
-// privacyApply returns the live re-apply script builder, or nil.
-func (h *Host) privacyApply() func() string {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.apply
 }
 
 // privacyOnWrite returns the page-message hook, or nil.
@@ -497,16 +489,16 @@ type openRequest struct {
 // Session is one window with one WebView2 environment and one user data
 // folder. All Win32 and COM work happens on the session's own OS thread.
 type Session struct {
-	host     *Host
-	profile  browser.ProfileID
-	path     string
-	outcome  browser.Outcome
+	host    *Host
+	profile browser.ProfileID
+	path    string
+	outcome browser.Outcome
 	// startHidden is set by OpenProfile: the session's window is created
 	// hidden because another session is currently active.
 	startHidden bool
-	requests chan openRequest
-	events   chan SessionEvent
-	done     chan struct{}
+	requests    chan openRequest
+	events      chan SessionEvent
+	done        chan struct{}
 
 	// OnEvent is called from arbitrary threads for lifecycle events and must
 	// not block.
@@ -516,11 +508,11 @@ type Session struct {
 	// impl while the browser process still holds a raw pointer to it.
 	keepAlive []any
 
-	hwnd     uintptr
-	instance uintptr
-	className *uint16
-	threadID  uint32
-	chromium *edge.Chromium
+	hwnd           uintptr
+	instance       uintptr
+	className      *uint16
+	threadID       uint32
+	chromium       *edge.Chromium
 	runtimeVersion string
 
 	callbacks callbackQueue
