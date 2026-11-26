@@ -882,7 +882,7 @@ export function renderUpdateStatus(container, s) {
             tone = 'error';
             break;
         case 'unsupported':
-            text = "Update checks aren't supported on this build.";
+            text = 'This is a development build. Install a release from GitHub to enable updates.';
             break;
         case 'unknown':
             text = 'Not checked yet.';
