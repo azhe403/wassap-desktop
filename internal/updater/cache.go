@@ -22,6 +22,7 @@ type UpdateCheckCache struct {
 	LatestVersion    string    `json:"latestVersion,omitempty"`
 	UpdateAvailable  bool      `json:"updateAvailable"`
 	ReleaseURL       string    `json:"releaseUrl,omitempty"`
+	PublishedAt      time.Time `json:"publishedAt,omitempty"` // publish time of the latest resolved release
 	StagedAsset      string    `json:"stagedAsset,omitempty"`
 	StagedDigest     string    `json:"stagedDigest,omitempty"`
 	DismissedVersion string    `json:"dismissedVersion,omitempty"`

@@ -21,14 +21,15 @@ const (
 // Status is what the UI needs to decide what to show. It is JSON-marshaled
 // into the `update:status` Wails event verbatim.
 type Status struct {
-	State          State     `json:"state"`
-	Channel        string    `json:"channel"`
-	CurrentVersion string    `json:"currentVersion"`
-	LatestVersion  string    `json:"latestVersion"`
-	ReleaseURL     string    `json:"releaseURL"`
-	Message        string    `json:"message,omitempty"`
-	CheckedAt      time.Time `json:"checkedAt"`
-	Dismissed      bool      `json:"dismissed"`
+	State           State     `json:"state"`
+	Channel         string    `json:"channel"`
+	CurrentVersion  string    `json:"currentVersion"`
+	LatestVersion   string    `json:"latestVersion"`
+	ReleaseURL      string    `json:"releaseURL"`
+	Message         string    `json:"message,omitempty"`
+	CheckedAt       time.Time `json:"checkedAt"`
+	LatestBuildDate time.Time `json:"latestBuildDate"`
+	Dismissed       bool      `json:"dismissed"`
 }
 
 // Prefs is the user's update preference, resolved by the binding layer.
@@ -115,6 +116,7 @@ func (c *Checker) Check(ctx context.Context, p Prefs, force bool) (Status, error
 	res.LatestVersion = st.LatestVersion
 	res.UpdateAvailable = st.State == StateAvailable
 	res.ReleaseURL = st.ReleaseURL
+	res.PublishedAt = st.LatestBuildDate
 	res.CheckedAt = c.now()
 	res.LastAttempt = c.now()
 	res.LastError = ""
@@ -164,11 +166,12 @@ func fresh(c UpdateCheckCache, now time.Time) bool {
 
 func statusFromCache(c UpdateCheckCache) Status {
 	st := Status{
-		Channel:        c.Channel,
-		CurrentVersion: c.CurrentVersion,
-		LatestVersion:  c.LatestVersion,
-		ReleaseURL:     c.ReleaseURL,
-		CheckedAt:      c.CheckedAt,
+		Channel:         c.Channel,
+		CurrentVersion:  c.CurrentVersion,
+		LatestVersion:   c.LatestVersion,
+		ReleaseURL:      c.ReleaseURL,
+		CheckedAt:       c.CheckedAt,
+		LatestBuildDate: c.PublishedAt,
 	}
 	if c.LastError != "" {
 		st.State = errorStateFor(c)
@@ -185,13 +188,14 @@ func statusFromCache(c UpdateCheckCache) Status {
 
 func statusOnError(cause error, cached UpdateCheckCache, channel, version string, now time.Time) Status {
 	st := Status{
-		Channel:        channel,
-		CurrentVersion: version,
-		LatestVersion:  cached.LatestVersion,
-		ReleaseURL:     cached.ReleaseURL,
-		Message:        cause.Error(),
-		CheckedAt:      cached.CheckedAt, // keep the last successful check's time
-		Dismissed:      cached.Dismissed(cached.LatestVersion),
+		Channel:         channel,
+		CurrentVersion:  version,
+		LatestVersion:   cached.LatestVersion,
+		ReleaseURL:      cached.ReleaseURL,
+		Message:         cause.Error(),
+		CheckedAt:       cached.CheckedAt,   // keep the last successful check's time
+		LatestBuildDate: cached.PublishedAt, // keep the known publish time across failures
+		Dismissed:       cached.Dismissed(cached.LatestVersion),
 	}
 	if cached.CheckedAt.IsZero() {
 		st.State = StateUpToDate
@@ -237,12 +241,13 @@ func (c *Checker) checkStable(ctx context.Context, p Prefs, cached UpdateCheckCa
 		return Status{}, nil, err
 	}
 	st := Status{
-		Channel:        p.Channel,
-		CurrentVersion: c.version,
-		LatestVersion:  rel.TagName,
-		ReleaseURL:     rel.HTMLURL,
-		CheckedAt:      c.now(),
-		Dismissed:      cached.Dismissed(rel.TagName),
+		Channel:         p.Channel,
+		CurrentVersion:  c.version,
+		LatestVersion:   rel.TagName,
+		ReleaseURL:      rel.HTMLURL,
+		CheckedAt:       c.now(),
+		LatestBuildDate: rel.PublishedAt.UTC(),
+		Dismissed:       cached.Dismissed(rel.TagName),
 	}
 	if ahead > 0 {
 		st.State = StateAvailable
@@ -268,12 +273,13 @@ func (c *Checker) checkNightly(ctx context.Context, p Prefs, cached UpdateCheckC
 	// published timestamp works as a per-build identity for dismissals.
 	latest := "nightly " + rel.PublishedAt.UTC().Format("2006-01-02T15:04Z")
 	st := Status{
-		Channel:        p.Channel,
-		CurrentVersion: c.version,
-		LatestVersion:  latest,
-		ReleaseURL:     rel.HTMLURL,
-		CheckedAt:      c.now(),
-		Dismissed:      cached.Dismissed(latest),
+		Channel:         p.Channel,
+		CurrentVersion:  c.version,
+		LatestVersion:   latest,
+		ReleaseURL:      rel.HTMLURL,
+		CheckedAt:       c.now(),
+		LatestBuildDate: rel.PublishedAt.UTC(),
+		Dismissed:       cached.Dismissed(latest),
 	}
 	if ahead > 0 {
 		st.State = StateAvailable
@@ -282,4 +288,3 @@ func (c *Checker) checkNightly(ctx context.Context, p Prefs, cached UpdateCheckC
 	}
 	return st, rel, nil
 }
-
