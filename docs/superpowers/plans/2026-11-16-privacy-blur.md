@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Adopt the MIT-licensed WhatsApp Privacy Blur engine into Wassap Desktop so every WebView2 session blurs sensitive WhatsApp Web content (hover-to-reveal), controlled from the app's own Settings page and a sidebar shield toggle.
+**Goal:** Adopt the MIT-licensed WhatsApp Privacy Blur engine into Wassap Desktop so every WebView2 session blurs sensitive WhatsApp Web content (hover-to-reveal), controlled from the app's own Settings page and a sidebar shield toggle. Cold-start fix (2026-11-26): do NOT install the engine via `AddScriptToExecuteOnDocumentCreated` (async registration misses the first document) — evaluate the prelude on `NavigationCompleted` with fresh settings; adapter also primes the first DOM pass because rAF can stall at startup.
 
 **Architecture:** The upstream engine (`selectors/*.js` + `content.js`) is vendored byte-identical into a new `internal/privacyblur` package and injected as one document-created script via go-webview2's `Chromium.Init` (the same precedent as the account-label injection). A small adapter of ours fakes the `chrome.*` API surface the engine uses, bridging upstream's storage to the app's `config.json` via a boot JSON baked at session creation plus live `Chromium.Eval` re-applies. Controls are native: a Privacy Blur section in Settings and a shield button in the sidebar. The add-on's in-page panel, floating shield and sidebar minimizer are deliberately not ported (user decision 2026-11-16).
 
