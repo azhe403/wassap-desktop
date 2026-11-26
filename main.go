@@ -29,6 +29,7 @@ var assets embed.FS
 // A development build (no stamp) reports version "dev"; the auto updater never acts on it.
 var version = "dev"
 var commit = ""
+var buildDate = "" // CI stamps this via -ldflags "-X main.buildDate=..." ; dev builds stay empty.
 
 // shellUserDataPath returns a fresh user data folder for the Wails shell.
 // WebView2 refuses to create a controller for a user data folder that is
@@ -44,10 +45,14 @@ func main() {
 	for _, arg := range os.Args[1:] {
 		if arg == "--version" || arg == "-v" {
 			if commit == "" {
-				fmt.Printf("wassap-desktop %s (dev)\n", version)
+				fmt.Printf("wassap-desktop %s (dev)", version)
 			} else {
-				fmt.Printf("wassap-desktop %s (%s)\n", version, commit)
+				fmt.Printf("wassap-desktop %s (%s)", version, commit)
 			}
+			if buildDate != "" {
+				fmt.Printf(" built %s", buildDate)
+			}
+			fmt.Println()
 			os.Exit(0)
 		}
 	}
@@ -123,7 +128,7 @@ func main() {
 		log.Printf("log: started, writing to %s", logPath)
 	}
 
-	shell := app.New(dirs, legacyMode, app.VersionInfo{Version: version, Commit: commit})
+	shell := app.New(dirs, legacyMode, app.VersionInfo{Version: version, Commit: commit, BuildDate: buildDate})
 
 	// Wire the asset server:
 	// In legacy mode, handler redirects 302 to web.whatsapp.com directly.

@@ -34,8 +34,9 @@ type dlDownloadState struct {
 
 // VersionInfo is what the About view shows.
 type VersionInfo struct {
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"buildDate"`
 }
 
 // UpdateStatus is the JSON contract between the updater and the frontend

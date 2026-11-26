@@ -62,7 +62,7 @@ jobs:
           else
             VER="0.0.0-nightly.${GITHUB_SHA::7}"
           fi
-          wails build -platform ${{ matrix.platform }} -o ${{ matrix.name }} ${{ matrix.tags }} -ldflags "-X main.version=${VER} -X main.commit=${GITHUB_SHA}"
+          wails build -platform ${{ matrix.platform }} -o ${{ matrix.name }} ${{ matrix.tags }} -ldflags "-X main.version=${VER} -X main.commit=${GITHUB_SHA} -X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
