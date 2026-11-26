@@ -64,6 +64,8 @@ Reason for A: it is the smallest change that fully covers the Windows replace-bi
 
 ## 5. Version stamping (prerequisite)
 
+> **2026-11-26 update:** a third stamp, `main.buildDate` (`-X main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)`), now ships in the same ldflags string. It flows into `app.VersionInfo.BuildDate` (`json:"buildDate"`) and is shown in About and `--version`. The GitHub release's `published_at` (already parsed in `github.go`) now flows as `updater.Status.LatestBuildDate time.Time`, persisted as `UpdateCheckCache.PublishedAt`, then exposed to the frontend as `UpdateStatus.LatestBuildDate` (RFC3339 UTC). Settings renders a read-only installed-vs-available comparison with both dates when an update is available or downloaded; missing dates render "date unavailable". No decision logic changed.
+
 Two package-level vars in `main.go`:
 
 ```go
@@ -154,8 +156,8 @@ UpdateChannel string `json:"updateChannel,omitempty"` // default "stable"
 
 ### 7.3 App bindings (`app.go`)
 
-- `GetVersion() (VersionInfo, error)` — `{version, commit}`.
-- `GetUpdateStatus() (UpdateStatus, error)` — cached check result + current download state (`idle|downloading|downloaded|applying|error|unsupported`) + progress (bytes/total) when downloading.
+- `GetVersion() (VersionInfo, error)` — `{version, commit}`; since 2026-11-26 also `{buildDate}` (UTC stamp, empty for dev builds).
+- `GetUpdateStatus() (UpdateStatus, error)` — cached check result + current download state (`idle|downloading|downloaded|applying|error|unsupported`) + progress (bytes/total) when downloading; since 2026-11-26 also `latestBuildDate` (RFC3339 UTC from the GitHub release's `published_at`, empty when unknown).
 - `GetAutoUpdate() bool` / `SetAutoUpdate(enabled bool) error`.
 - `GetUpdateChannel() string` / `SetUpdateChannel(channel string) error`.
 - `CheckForUpdates() (UpdateStatus, error)` — user-initiated, bypasses throttle.
@@ -172,8 +174,8 @@ If auto-update is ON and a check finds an update, the checker auto-starts the do
 - **Settings → Software Update** (new group, same `settings-group` pattern):
   - Toggle "Auto-update" (default off) with description: checks for new versions and downloads them automatically; installs on restart.
   - Channel `<select>`: `Stable (recommended)` / `Nightly (bleeding edge, built from main)`.
-  - Row: current version (from `GetVersion()`), channel, last checked time, status line, and a "Check for updates" button.
-- **About**: version text bound to `GetVersion()` instead of hardcoded.
+  - Row: current version (from `GetVersion()`), channel, last checked time, status line, and a "Check for updates" button. Since 2026-11-26: when an update is `available` or `downloaded`, a read-only two-row comparison shows installed vs available version plus build/publish dates (UTC, `date unavailable` when missing).
+- **About**: version text bound to `GetVersion()` instead of hardcoded; since 2026-11-26 also shows the installed build date when the stamp is present.
 - **Notice** — user decision (2026-11-15): **no floating pill**. The DOM is covered by native WebView2 child HWNDs while a WhatsApp session is open, so a DOM overlay is invisible exactly when it matters. The notice lives in two places only:
   1. **Settings → About/Software Update status row**: shows current version, channel, last check, and context action — [Update] when `available` (OFF path), [Restart to update] when `downloaded`, or a progress line while `downloading`. Update → `DownloadUpdate()`; Restart → `RestartToApplyUpdate()`.
   2. **Sidebar badge**: a small dot on the Settings/sidebar entry whenever `available` or `downloaded` is active and not dismissed — the only ambient signal, visible because the sidebar is always DOM-owned chrome. Driven by `EventsOn("update:status")`.

@@ -64,6 +64,7 @@ Wassap Desktop can check the [GitHub Releases](https://github.com/azhe403/wassap
 - **Windows only.** Linux/macOS report "not supported" for now.
 - **Versions ≤ v0.1.0 have no updater** and don't know about this feature; their first update is a manual download from the Releases page. Every release after that can update itself.
 - Development builds (no version stamp) disable the updater entirely.
+- **Version and build date:** Settings → Software Update shows the installed and available version with their build/publish dates side by side when an update exists; the About row shows the installed build date. Dates are UTC.
 
 ## Testing
 
