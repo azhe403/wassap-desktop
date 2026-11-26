@@ -42,16 +42,17 @@ type VersionInfo struct {
 // UpdateStatus is the JSON contract between the updater and the frontend
 // (bindings and the `update:status` Wails event).
 type UpdateStatus struct {
-	State          string `json:"state"`
-	Channel        string `json:"channel"`
-	CurrentVersion string `json:"currentVersion"`
-	LatestVersion  string `json:"latestVersion"`
-	ReleaseURL     string `json:"releaseURL"`
-	Message        string `json:"message,omitempty"`
-	CheckedAt      string `json:"checkedAt,omitempty"`
-	ProgressDone   int64  `json:"progressDone,omitempty"`
-	ProgressTotal  int64  `json:"progressTotal,omitempty"`
-	Dismissed      bool   `json:"dismissed"`
+	State           string `json:"state"`
+	Channel         string `json:"channel"`
+	CurrentVersion  string `json:"currentVersion"`
+	LatestVersion   string `json:"latestVersion"`
+	ReleaseURL      string `json:"releaseURL"`
+	Message         string `json:"message,omitempty"`
+	CheckedAt       string `json:"checkedAt,omitempty"`
+	LatestBuildDate string `json:"latestBuildDate,omitempty"`
+	ProgressDone    int64  `json:"progressDone,omitempty"`
+	ProgressTotal   int64  `json:"progressTotal,omitempty"`
+	Dismissed       bool   `json:"dismissed"`
 }
 
 func statusToUpdateStatus(st updater.Status) UpdateStatus {
@@ -66,6 +67,9 @@ func statusToUpdateStatus(st updater.Status) UpdateStatus {
 	}
 	if !st.CheckedAt.IsZero() {
 		out.CheckedAt = st.CheckedAt.UTC().Format(time.RFC3339)
+	}
+	if !st.LatestBuildDate.IsZero() {
+		out.LatestBuildDate = st.LatestBuildDate.UTC().Format(time.RFC3339)
 	}
 	return out
 }
