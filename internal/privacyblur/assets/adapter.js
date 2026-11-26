@@ -69,6 +69,35 @@
     window.chrome.runtime.onMessage = { addListener: function () {} };
   }
 
+  // WebView2 can stall requestAnimationFrame while the first document frames
+  // are being composed. Upstream schedules its first DOM pass through rAF, so
+  // on a cold start that pass never runs and chats stay unblurred until the
+  // user toggles a setting (which calls applyDomUpdates directly). Prime the
+  // initial DOM once with timer callbacks, which do run at document_start.
+  // applyJsTargets/applyUnblurLastN are idempotent (they only add classes).
+  function primeInitialDom() {
+    try {
+      if (typeof window.applyUnblurLastN === 'function') window.applyUnblurLastN();
+      if (typeof window.applyJsTargets === 'function') window.applyJsTargets();
+    } catch (e) { /* never break the page */ }
+  }
+
+  function primeWhenReady() {
+    try {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { setTimeout(primeInitialDom, 0); }, { once: true });
+      } else {
+        setTimeout(primeInitialDom, 0);
+      }
+      // WhatsApp mounts most of its chat DOM after DOMContentLoaded; a couple
+      // of extra passes cover it if rAF is still stalled at that point.
+      setTimeout(primeInitialDom, 250);
+      setTimeout(primeInitialDom, 1000);
+    } catch (e) { /* never break the page */ }
+  }
+
+  primeWhenReady();
+
   window.__wassapPrivacyApply = function (json) {
     try {
       var next = (typeof json === 'string') ? JSON.parse(json) : json;

@@ -52,6 +52,15 @@ func TestApplyScriptCarriesCurrentJSON(t *testing.T) {
 	}
 }
 
+// Guard only: the real regression was verified with a browser harness at
+// document_start (rAF never fired; adapter primes the initial DOM by timer).
+func TestPreludePrimesInitialDOM(t *testing.T) {
+	pre := PreludeScript(`{"enabled":true}`)
+	if !strings.Contains(pre, "primeInitialDom") || !strings.Contains(pre, "DOMContentLoaded") {
+		t.Fatal("prelude lost the startup DOM prime — blur will not appear until a setting is toggled")
+	}
+}
+
 func TestUpstreamSentinels(t *testing.T) {
 	cj, err := os.ReadFile(filepath.Join("assets", "upstream", "content.js"))
 	if err != nil {

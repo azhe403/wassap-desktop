@@ -326,14 +326,16 @@ func (s *Session) setUpWebView() error {
 			s.emit(EventProcessFailed, fmt.Errorf("webview2: %s did not load the start page (web error %d)", s.profile, status))
 			return
 		}
-		// Re-apply privacy settings on every navigation: the document-created
-		// prelude bakes the settings as of session start, so a hard reload
-		// would otherwise re-seed stale values. ExecuteScript queues
-		// asynchronously; this callback already runs on the session's UI
-		// thread, so no marshalling is needed.
-		if ha := s.host.privacyApply(); ha != nil {
-			if script := ha(); script != "" {
+		// Inject the engine at NavigationCompleted instead of relying on
+		// AddScriptToExecuteOnDocumentCreated: the registration is asynchronous
+		// and can lose the race against the first Navigate(), leaving the page
+		// with no engine at all until a settings toggle fires an Eval. Building
+		// the prelude here also means upstream sees the full DOM immediately,
+		// so its first pass is direct (no rAF dependence) with fresh settings.
+		if hp := s.host.privacyPrelude(); hp != nil {
+			if script := hp(); script != "" {
 				c.Eval(script)
+				log.Printf("webview2: privacy blur engine evaluated for %s", s.profile)
 			}
 		}
 	}
@@ -360,15 +362,10 @@ func (s *Session) setUpWebView() error {
 	// Watch the account's own profile photo. Best-effort like the notification
 	// label: a broken selector leaves the initials avatar in place.
 	c.Init(avatar.DocumentScript(string(s.profile)))
-	// Install the privacy blur engine before the first navigation. Failure is
-	// logged and never fails session setup: privacy is best-effort, like the
-	// notification label.
-	if hp := s.host.privacyPrelude(); hp != nil {
-		if p := hp(); p != "" {
-			c.Init(p)
-			log.Printf("webview2: privacy blur prelude injected for %s", s.profile)
-		}
-	}
+	// Privacy blur is deliberately NOT installed with c.Init here:
+	// AddScriptToExecuteOnDocumentCreated is asynchronous and can miss the
+	// first document. The engine is evaluated on NavigationCompleted instead
+	// (see below), where the DOM is complete and settings are fresh.
 	// Durably grant the notification permission for the WhatsApp origin in
 	// the profile: an already-persisted deny cannot be lifted by the
 	// request-time handler.
