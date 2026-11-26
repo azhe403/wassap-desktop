@@ -24,9 +24,11 @@ var manifestOrder = []string{
 	"content.js",
 }
 
-// PreludeScript returns the full document-created script for one session:
-// the boot settings object, the adapter, then every upstream file in manifest
-// order. settingsJSON must come from encoding/json (it escapes <, > and &).
+// PreludeScript returns the full engine script for one session: the boot
+// settings object, the adapter, then every upstream file in manifest order.
+// The WebView2 host evaluates this on NavigationCompleted (not via Init —
+// see internal/platform/windows/webview2). settingsJSON must come from
+// encoding/json (it escapes <, > and &).
 func PreludeScript(settingsJSON string) string {
 	var b strings.Builder
 	b.WriteString("window.__WA_PRIVACY_BOOT = ")

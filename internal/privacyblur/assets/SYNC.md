@@ -1,4 +1,6 @@
-# Upstream sync — whatsapp-privacy-blur engine
+# Upstream sync - whatsapp-privacy-blur engine
+
+**Maintainer's guide (architecture, adapter contract, full re-sync runbook): `../../docs/privacy-blur-engine.md`.**
 
 - Source: https://github.com/Nyihui/WhatsappPrivacyBlur-Extension
 - Vendored: v3.2.0 @ 82cc20e (2026-11-14), MIT — see LICENSE in this directory.
