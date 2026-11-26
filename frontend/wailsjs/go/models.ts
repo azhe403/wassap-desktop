@@ -109,6 +109,7 @@ export namespace app {
 	    releaseURL: string;
 	    message?: string;
 	    checkedAt?: string;
+	    latestBuildDate?: string;
 	    progressDone?: number;
 	    progressTotal?: number;
 	    dismissed: boolean;
@@ -126,6 +127,7 @@ export namespace app {
 	        this.releaseURL = source["releaseURL"];
 	        this.message = source["message"];
 	        this.checkedAt = source["checkedAt"];
+	        this.latestBuildDate = source["latestBuildDate"];
 	        this.progressDone = source["progressDone"];
 	        this.progressTotal = source["progressTotal"];
 	        this.dismissed = source["dismissed"];
@@ -134,6 +136,7 @@ export namespace app {
 	export class VersionInfo {
 	    version: string;
 	    commit: string;
+	    buildDate: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new VersionInfo(source);
@@ -143,6 +146,7 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
 	        this.commit = source["commit"];
+	        this.buildDate = source["buildDate"];
 	    }
 	}
 
