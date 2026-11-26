@@ -128,6 +128,14 @@ function renderNavItem(acc, activeId, avatars = {}) {
     `;
 }
 
+/** Total persisted profile storage, from the latest ListProfiles sample. */
+function totalDiskLabel() {
+    if (diskBytesByAccount.size === 0) return '…';
+    let total = 0;
+    for (const bytes of diskBytesByAccount.values()) total += bytes;
+    return formatUsageBytes(total);
+}
+
 /** Compact CPU / RAM / disk line for one account, from the cached samples. */
 function navMetricsHTML(accountId) {
     const profile = ((lastUsage && lastUsage.profiles) || []).find(p => p.id === accountId);
@@ -189,6 +197,8 @@ async function loadStorageSummaries(container, accounts) {
 
     try {
         const profiles = await api.ListProfiles();
+        diskBytesByAccount.clear();
+        storageInfoByAccount.clear();
         (profiles || []).forEach(p => {
             const id = p.id || p.ID;
             storageInfoByAccount.set(id, p);
@@ -223,6 +233,18 @@ function applyStorage() {
         if (!diskBytesByAccount.has(id)) return;
         el.innerHTML = navMetricsHTML(id);
     });
+
+    applyTotalUsage();
+}
+
+function applyTotalUsage() {
+    const usage = lastUsage;
+    const totalEl = document.getElementById('profiles-total-usage');
+    if (!totalEl || !usage) return;
+    const ram = formatUsageBytes(usage.totalWorkingSetBytes);
+    const cpu = usage.totalCPUPercent.toFixed(1);
+    const disk = totalDiskLabel();
+    totalEl.innerHTML = `Wassap Desktop total&nbsp; <strong>${ram} RAM</strong> · <strong>${cpu}% CPU</strong> · <strong>${escapeHTML(disk)} DISK</strong>`;
 }
 
 function renderStorage(info) {
@@ -327,10 +349,7 @@ function applyUsage() {
     const usage = lastUsage;
     if (!usage) return;
 
-    const totalEl = document.getElementById('profiles-total-usage');
-    if (totalEl) {
-        totalEl.innerHTML = `Wassap Desktop total&nbsp; <strong>${formatUsageBytes(usage.totalWorkingSetBytes)} RAM</strong> · <strong>${usage.totalCPUPercent.toFixed(1)}% CPU</strong>`;
-    }
+    applyTotalUsage();
 
     // Compact CPU / RAM / disk line under every account in the left-hand list.
     document.querySelectorAll('.profile-nav-metrics').forEach(el => {
