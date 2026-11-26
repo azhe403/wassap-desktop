@@ -7,6 +7,17 @@
  * @param {Object} handlers - { onCloseToTrayChange, onPrivacyBlurChange, privacyBlur }
  */
 let settingsActivePanel = 'general';
+let installedBuildDate = ''; // cached from GetVersion() so the comparison can fill in either order
+
+function formatBuildUTC(iso) {
+    if (!iso) return 'date unavailable';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'date unavailable';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getUTCDate())} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+}
+
 export function renderSettingsPage(container, handlers = {}) {
     container.innerHTML = `
         <div class="settings-page-view" role="region" aria-label="Settings">
@@ -246,6 +257,10 @@ export function renderSettingsPage(container, handlers = {}) {
                         <span class="settings-toggle-title">Wassap Desktop <span id="update-current-version"></span></span>
                         <span class="settings-toggle-desc" id="update-last-checked">Not checked yet</span>
                         <span class="update-status-text" id="update-status-text"></span>
+                        <div class="update-compare" id="update-compare" hidden>
+                            <div class="update-compare-row"><span class="update-compare-label">Installed</span><span id="update-compare-installed"></span></div>
+                            <div class="update-compare-row"><span class="update-compare-label">Available</span><span id="update-compare-available"></span></div>
+                        </div>
                         <div class="update-status-actions">
                             <button id="btn-update-check" class="update-action-btn update-action-secondary" type="button">Check for updates</button>
                             <button id="btn-update-action" class="update-action-btn" type="button" style="display:none;"></button>
@@ -268,6 +283,7 @@ export function renderSettingsPage(container, handlers = {}) {
                         </span>
                     </div>
                     <span id="about-version" style="font-size: 12px; color: var(--text-secondary);">dev</span>
+                    <span id="about-build-date" style="font-size: 12px; color: var(--text-secondary);"></span>
                 </div>
             </div>
 
@@ -676,9 +692,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.</pre>
     }
 
     const aboutVersion = container.querySelector('#about-version');
+    const aboutBuildDate = container.querySelector('#about-build-date');
     if (api && api.GetVersion && aboutVersion) {
         api.GetVersion().then((v) => {
             aboutVersion.textContent = `v${v.version}${v.commit ? ' (' + v.commit.slice(0, 7) + ')' : ''}`;
+            installedBuildDate = v.buildDate || '';
+            if (aboutBuildDate) {
+                aboutBuildDate.textContent = v.buildDate ? `build ${formatBuildUTC(v.buildDate)}` : '';
+            }
+            if (container.__updateStatus) {
+                renderUpdateStatus(container, container.__updateStatus);
+            }
         }).catch((err) => {
             console.error('Failed to load version:', err);
         });
@@ -811,6 +835,7 @@ export function renderUpdateStatus(container, s) {
     const current = container.querySelector('#update-current-version');
     const lastChecked = container.querySelector('#update-last-checked');
     const textEl = container.querySelector('#update-status-text');
+    const compareEl = container.querySelector('#update-compare');
     const actionBtn = container.querySelector('#btn-update-action');
     const dismissBtn = container.querySelector('#btn-update-dismiss');
     if (!textEl) return;
@@ -868,6 +893,21 @@ export function renderUpdateStatus(container, s) {
 
     textEl.textContent = text;
     textEl.classList.toggle('error', tone === 'error');
+
+    if (compareEl) {
+        const showCompare = (s.state === 'available' || s.state === 'downloaded') && !!s.latestVersion;
+        compareEl.hidden = !showCompare;
+        if (showCompare) {
+            const installed = container.querySelector('#update-compare-installed');
+            const available = container.querySelector('#update-compare-available');
+            if (installed) {
+                installed.textContent = `v${s.currentVersion || 'dev'} · ${formatBuildUTC(installedBuildDate)}`;
+            }
+            if (available) {
+                available.textContent = `${s.latestVersion} · ${formatBuildUTC(s.latestBuildDate)}`;
+            }
+        }
+    }
 
     if (actionBtn) {
         if (action) {

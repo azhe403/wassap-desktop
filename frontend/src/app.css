@@ -574,6 +574,38 @@ html, body {
     color: var(--danger-red);
 }
 
+.update-compare {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    font-size: 12px;
+    max-width: 100%;
+}
+
+.update-compare[hidden] {
+    display: none;
+}
+
+.update-compare-row {
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.update-compare-label {
+    color: var(--text-secondary);
+    min-width: 64px;
+    flex-shrink: 0;
+}
+
+.update-compare-row span:last-child {
+    color: var(--text-primary);
+    text-align: right;
+}
+
 /* ==========================================================================
    Privacy Blur settings
    ========================================================================== */
