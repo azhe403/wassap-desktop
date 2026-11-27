@@ -119,7 +119,11 @@ func (c *Checker) Check(ctx context.Context, p Prefs, force bool) (Status, error
 	res.LatestVersion = st.LatestVersion
 	res.UpdateAvailable = st.State == StateAvailable
 	res.ReleaseURL = st.ReleaseURL
-	res.PublishedAt = st.LatestBuildDate
+	// A successful check with no release (e.g. no stable tag yet) yields a
+	// zero date; keep the last known publish time instead of wiping it.
+	if !st.LatestBuildDate.IsZero() {
+		res.PublishedAt = st.LatestBuildDate
+	}
 	res.CheckedAt = c.now()
 	res.LastAttempt = c.now()
 	res.LastError = ""

@@ -394,15 +394,17 @@ Expected: PASS (new + existing).
   ```go
   // On *webview2.Host (and as HostController interface methods on stubHost):
   func (h *Host) EvalAll(script string)                    // per-session s.call(chromium.Eval), fire-and-forget, 3s cap
-  func (h *Host) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
+  func (h *Host) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any))
   ```
+
+  There is no `Apply` host hook: live updates are built by the app with `privacyblur.ApplyScript(...)` and sent through `EvalAll` (Task 4). The earlier three-argument setter and `privacyApply()` were removed in the 2026-11-26 cold-start fix.
 
 - [ ] **Step 1: Add the two hook fields and delegate setter on `Host`**
 
-In `host.go`, extend the `Host` struct with `prelude func() string; apply func() string; onPrivacyWrite func(map[string]any)` (guarded by the same `mu` used for sessions, set once at startup before any session exists — but take the lock anyway), and add:
+In `host.go`, extend the `Host` struct with `prelude func() string; onPrivacyWrite func(map[string]any)` (guarded by the same `mu` used for sessions, set once at startup before any session exists — but take the lock anyway), and add:
 
 ```go
-func (h *Host) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
+func (h *Host) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any))
 func (h *Host) EvalAll(script string)  // sessionsSnapshot() -> s.evalScript(script) per session
 ```
 
@@ -419,36 +421,26 @@ func (s *Session) evalScript(script string) {
 
 `EvalAll` skips sessions with nil chromium (mid-teardown) and logs failures at debug level; never returns an error.
 
-- [ ] **Step 2: Document-created injection in `setUpWebView`**
+- [ ] **Step 2: Do NOT register the engine with `c.Init`**
 
-In `win32_windows.go`, right after `wireNotificationClickMessage(s, c)` and before `allowNotificationPermission`:
+In `win32_windows.go`, do not add a `c.Init(p)` call for privacy blur. `AddScriptToExecuteOnDocumentCreated` registers asynchronously and loses the race against the first `Navigate()`, which leaves the first document with no engine at all. The account-label injection may stay. Leave a comment at the old site explaining that the engine is evaluated in `NavigationCompletedCallback` instead.
 
-```go
-if h := s.host; h.prelude != nil {
-	if p := h.prelude(); p != "" {
-		c.Init(p)
-		log.Printf("webview2: privacy blur prelude injected for %s", s.profile)
-	}
-}
-```
-
-`s.host.prelude` is read via an accessor on Host (e.g. `h.privacyPrelude()`) to avoid field-grab races. Failure must never fail session setup.
-
-- [ ] **Step 3: Re-apply on navigation (kills the stale-boot gap)**
+- [ ] **Step 3: Evaluate the full prelude on navigation (kills the cold-start race and stale boot values)**
 
 In the existing `NavigationCompletedCallback` (win32_windows.go), after the current failure-handling branch, add:
 
 ```go
 if ok, err := IsSuccess(args); err == nil && ok {
-	if a := s.host.privacyApply(); a != nil {
-		if script := a(); script != "" {
-			s.chromium.Eval(script)  // already on the session UI thread; ExecuteScript queues async
+	if hp := s.host.privacyPrelude(); hp != nil {
+		if script := hp(); script != "" {
+			c.Eval(script)  // already on the session UI thread; ExecuteScript queues async
+			log.Printf("webview2: privacy blur engine evaluated for %s", s.profile)
 		}
 	}
 }
 ```
 
-(Use the host accessor; nil host hooks = no-op.)
+The prelude closure reads `config.json` fresh on each call, so the engine installs with current settings against the complete DOM; upstream's first pass is direct (no rAF dependence). Failure must never fail session setup. (Use the host accessor; nil host hooks = no-op.)
 
 - [ ] **Step 4: Route `privacy-blur-set` through the single MessageCallback**
 
@@ -500,7 +492,7 @@ type HostController interface {
 	SetVisible(visible bool) error
 	SetActiveSession(id browser.ProfileID)
 	EvalAll(script string)
-	SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any))
+	SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any))
 }
 ```
 
@@ -508,7 +500,7 @@ type HostController interface {
 
 ```go
 func (s *stubHost) EvalAll(script string) {}
-func (s *stubHost) SetPrivacyDelegate(prelude func() string, apply func() string, onWrite func(map[string]any)) {}
+func (s *stubHost) SetPrivacyDelegate(prelude func() string, onWrite func(map[string]any)) {}
 ```
 
 - [ ] **Step 3: Effective-config helper on `*App`**
@@ -536,7 +528,6 @@ hostDelegate := a.host
 effective := func() config.PrivacyBlurConfig { return a.effectivePrivacyBlur() }
 hostDelegate.SetPrivacyDelegate(
 	func() string { return privacyblur.PreludeScript(mustJSON(effective())) },
-	func() string { return privacyblur.ApplyScript(mustJSON(effective())) },
 	a.handlePrivacyBlurWrite,
 )
 ```

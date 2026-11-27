@@ -73,6 +73,38 @@ func TestFailedCheckPreservesPublishTime(t *testing.T) {
 	}
 }
 
+func TestSuccessfulCheckWithNoReleasePreservesPublishTime(t *testing.T) {
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	f := &fakeGitHub{latestCode: 404}
+	c, cachePath, _ := newChecker(t, f, "0.1.0", "oldcommit", now)
+	cache := &Cache{Path: cachePath}
+	if err := cache.Store(UpdateCheckCache{
+		CheckedAt:       now.Add(-13 * time.Hour),
+		LastAttempt:     now.Add(-13 * time.Hour),
+		Channel:         "stable",
+		UpdateAvailable: true,
+		LatestVersion:   "v0.2.0",
+		PublishedAt:     wantStablePublish,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := c.Check(context.Background(), Prefs{Channel: "stable"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != StateUpToDate {
+		t.Fatalf("state = %q, want %q", st.State, StateUpToDate)
+	}
+	got, err := cache.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.PublishedAt.Equal(wantStablePublish) {
+		t.Errorf("no-release check wiped the cached publish time: %v, want %v", got.PublishedAt, wantStablePublish)
+	}
+}
+
 func TestCacheRoundTripIncludesPublishedAt(t *testing.T) {
 	dir := t.TempDir()
 	c := &Cache{Path: dir + "/update-check.json"}

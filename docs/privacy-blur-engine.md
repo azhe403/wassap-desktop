@@ -137,8 +137,10 @@ rebinding metadata — `Alt+/` is fixed.
 
 ## 5. Injection lifecycle in Wassap Desktop
 
-1. `NewApp` installs a host delegate: `Prelude` and `Apply` closures that read
-   `config.json` fresh on **every** call, plus the in-page write hook.
+1. `NewApp` installs one host delegate: a `Prelude` closure that reads
+   `config.json` fresh on **every** call, plus the in-page write hook. There is
+   no `Apply` delegate: live updates are built by the app with `ApplyScript(json)`
+   and broadcast through `EvalAll`.
 2. `Session.setUpWebView` does **not** call `c.Init` for privacy blur. Registration via
    `AddScriptToExecuteOnDocumentCreated` is asynchronous and lost the race against the
    first `Navigate()`, leaving the page with no engine until a settings toggle fired an
@@ -179,8 +181,9 @@ rebinding metadata — `Alt+/` is fixed.
    a Go test in `internal/platform/windows/webview2` starts an `httptest` server serving
    a minimal DOM such as
    `<div data-testid="msg-container"><div><span data-testid="selectable-text">x</span></div></div>`,
-   sets `Host.SetPrivacyDelegate` to `privacyblur.PreludeScript(<enabled settings JSON>)`,
-   opens a probe profile, and the page reports computed `getComputedStyle(el).filter`
+   registers `Host.SetPrivacyDelegate` with a prelude closure returning
+   `privacyblur.PreludeScript(<enabled settings JSON>)` and a write hook, opens a
+   probe profile, and the page reports computed `getComputedStyle(el).filter`
    back to Go via an image beacon or POST. Expected: class `wa-js-target-blurTextChats-3-0`
    and `filter: blur(3px)` without any manual toggle. Run it **before** deleting the
    harness; it is the only test that exercises the real injection path. (Full run takes
